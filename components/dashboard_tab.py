@@ -24,6 +24,8 @@ _HEATER_COLORS = {
     "B0018": "#FB923C",
 }
 
+_FAULT_PALETTE = ["#43A047", "#1976D2", "#E53935", "#FB8C00"]
+
 
 def _build_health_bar(health_df_sorted: pd.DataFrame, show_threshold: bool) -> go.Figure:
     """Build the heater health score bar chart with optional threshold line."""
@@ -83,6 +85,39 @@ def _build_health_bar(health_df_sorted: pd.DataFrame, show_threshold: bool) -> g
     return fig
 
 
+def _build_fault_bar(fault_df: pd.DataFrame, selected: list) -> go.Figure:
+    """Build the fault type bar chart filtered to selected fault types."""
+    filtered = fault_df[fault_df["fault_type"].isin(selected)].sort_values(
+        "count", ascending=False
+    ).reset_index(drop=True)
+
+    fig = go.Figure()
+    for i, row in filtered.iterrows():
+        fig.add_trace(go.Bar(
+            x=[row["fault_type"]],
+            y=[row["count"]],
+            name=row["fault_type"],
+            marker_color=_FAULT_PALETTE[i % len(_FAULT_PALETTE)],
+            text=[row["count"]],
+            textposition="outside",
+            textfont=dict(size=12),
+            hovertemplate=f"<b>{row['fault_type']}</b><br>Count: {row['count']}<extra></extra>",
+            width=0.6,
+        ))
+
+    fig.update_layout(
+        title="Fault Type Distribution",
+        xaxis_title="",
+        yaxis_title="Number of Events",
+        showlegend=False,
+        margin=dict(l=50, r=40, t=50, b=120),
+        xaxis=dict(tickangle=-30, tickfont=dict(size=11)),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
+        bargap=0.3,
+    )
+    return fig
+
+
 def build(summary: dict) -> list:
     """
     Build the Overview tab inside a gr.Blocks context.
@@ -117,7 +152,7 @@ def build(summary: dict) -> list:
         with gr.Column(scale=1, min_width=150):
             gr.Markdown("### Critical Engines")
             crit_kpi = gr.Markdown(
-                f"# **{summary.get('critical_engines', '--'):,}**",
+                f"# **{summary.get('critical_engines', '--')}**",
                 elem_id="kpi-crit",
             )
         with gr.Column(scale=1, min_width=150):
@@ -143,17 +178,25 @@ def build(summary: dict) -> list:
         rul_buckets_chart   = gr.Plot(label="Engine Health Distribution")
 
     with gr.Row():
-        # Chart 3: Heater Health Score (replaced from torque chart)
+        # Chart 3: Heater Health Score
         with gr.Column():
             threshold_toggle = gr.Checkbox(
                 value=True,
                 label="Show Degradation Threshold Line",
             )
             torque_chart = gr.Plot(label="Heater Health Score")
-        type_chart = gr.Plot(label="Tool Wear vs Torque (coloured by failure)")
 
-    # State for threshold toggle
+        # Chart 4: Electrical Fault Distribution
+        with gr.Column():
+            fault_toggle = gr.CheckboxGroup(
+                choices=[], value=[],
+                label="Show Fault Types",
+            )
+            type_chart = gr.Plot(label="Fault Type Distribution")
+
+    # State
     health_df_state = gr.State(value=None)
+    fault_df_state  = gr.State(value=None)
 
     # Anomaly alert banner
     gr.Markdown("### ⚠️ Anomaly Alerts (tool wear > 200 min or torque > 65 Nm)")
@@ -166,7 +209,7 @@ def build(summary: dict) -> list:
         role  = user["role"]  if user else "viewer"
 
         try:
-            # --- Failure modes bar chart ---
+            # --- Chart 1: Failure modes bar chart ---
             fm_df = db_service.get_cnc_failure_modes()
             fm_df = fm_df.sort_values("count", ascending=True).reset_index(drop=True)
             fm_df["failure_mode"] = fm_df["failure_mode"].str.replace(r"\s*\([A-Z]+\)\s*$", "", regex=True)
@@ -184,7 +227,7 @@ def build(summary: dict) -> list:
             fm_fig.update_traces(marker_color=[first_color, second_color] + rest_colors)
             fm_fig.update_layout(coloraxis_showscale=False, showlegend=False)
 
-            # --- RUL health buckets ---
+            # --- Chart 2: RUL health buckets ---
             rul_df  = db_service.get_engine_rul_buckets()
             rul_df  = rul_df.sort_values("count", ascending=True).reset_index(drop=True)
             rul_fig = px.bar(
@@ -204,17 +247,13 @@ def build(summary: dict) -> list:
                 GROUP BY PhID, id_cycle
                 ORDER BY PhID, id_cycle
             """)
-
             health_rows = []
             for phid, grp in heater_df.groupby("PhID"):
                 grp_s    = grp.sort_values("id_cycle")
                 baseline = grp_s.head(10)["avg_voltage"].mean()
                 recent   = grp_s.tail(10)["avg_voltage"].mean()
                 score    = round((recent / baseline) * 100, 1) if baseline > 0 else 0
-                health_rows.append({
-                    "PhID": phid,
-                    "health_score_pct": score,
-                })
+                health_rows.append({"PhID": phid, "health_score_pct": score})
             health_df_sorted = (
                 pd.DataFrame(health_rows)
                 .sort_values("health_score_pct", ascending=False)
@@ -222,21 +261,11 @@ def build(summary: dict) -> list:
             )
             heater_health_fig = _build_health_bar(health_df_sorted, show_threshold=True)
 
-            # --- Chart 4: Tool Wear vs Torque ---
-            sc_df   = db_service.get_cnc_scatter_data(limit=2000)
-            typ_fig = px.scatter(
-                sc_df, x="tool_wear_min", y="torque_nm",
-                color="failure_label",
-                color_discrete_map={"Normal": "#43A047", "Failure": "#E53935"},
-                opacity=0.6,
-                title="Tool Wear vs Torque (coloured by failure)",
-                labels={
-                    "tool_wear_min": "Tool Wear (min)",
-                    "torque_nm":     "Torque (Nm)",
-                    "failure_label": "Status",
-                },
-            )
-            typ_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
+            # --- Chart 4: Electrical Fault Distribution ---
+            fault_df   = db_service.get_electrical_fault_summary()
+            fault_df   = fault_df.sort_values("count", ascending=False).reset_index(drop=True)
+            all_faults = fault_df["fault_type"].tolist()
+            fault_fig  = _build_fault_bar(fault_df, all_faults)
 
             # --- Anomaly table ---
             anom_df = db_service.get_cnc_anomalies(limit=30)
@@ -246,19 +275,25 @@ def build(summary: dict) -> list:
                 user_email=email, user_role=role,
                 source_tables=f"{db_service.CNC_TABLE}, {db_service.ENGINE_TABLE}",
                 query_text="Dashboard overview load",
-                row_count=len(sc_df),
+                row_count=len(anom_df),
             )
 
             return (
-                fm_fig, rul_fig, heater_health_fig, typ_fig, anom_df, "",
-                health_df_sorted,  # → health_df_state
+                fm_fig, rul_fig, heater_health_fig, fault_fig, anom_df, "",
+                health_df_sorted,                                          # → health_df_state
+                fault_df,                                                  # → fault_df_state
+                gr.CheckboxGroup(choices=all_faults, value=all_faults),   # → fault_toggle
             )
 
         except Exception as exc:
             logger.error("Dashboard load_charts error: %s", exc)
             empty = go.Figure()
             empty.update_layout(title="Data unavailable")
-            return empty, empty, empty, empty, gr.update(), f"⚠️ {str(exc)[:120]}", None
+            return (
+                empty, empty, empty, empty, gr.update(),
+                f"⚠️ {str(exc)[:120]}",
+                None, None, gr.update(),
+            )
 
     def redraw_health_bar(show_threshold, raw_health_df):
         if raw_health_df is None:
@@ -266,8 +301,17 @@ def build(summary: dict) -> list:
         df = pd.DataFrame(raw_health_df) if isinstance(raw_health_df, list) else raw_health_df
         return _build_health_bar(df, show_threshold)
 
-    outputs = [failure_modes_chart, rul_buckets_chart, torque_chart,
-               type_chart, anomaly_table, status_msg, health_df_state]
+    def redraw_fault_chart(selected, raw_df):
+        if raw_df is None or not selected:
+            return go.Figure()
+        df = pd.DataFrame(raw_df) if isinstance(raw_df, list) else raw_df
+        return _build_fault_bar(df, selected)
+
+    outputs = [
+        failure_modes_chart, rul_buckets_chart, torque_chart,
+        type_chart, anomaly_table, status_msg,
+        health_df_state, fault_df_state, fault_toggle,
+    ]
 
     refresh_btn.click(fn=load_charts, outputs=outputs)
 
@@ -275,6 +319,12 @@ def build(summary: dict) -> list:
         fn=redraw_health_bar,
         inputs=[threshold_toggle, health_df_state],
         outputs=[torque_chart],
+    )
+
+    fault_toggle.change(
+        fn=redraw_fault_chart,
+        inputs=[fault_toggle, fault_df_state],
+        outputs=[type_chart],
     )
 
     # Return (outputs, load_fn) so app.py can wire demo.load()
