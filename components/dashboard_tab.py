@@ -149,6 +149,21 @@ def build(summary: dict) -> list:
                     "failure_label": "Status",
                 },
             )
+            # Shaded envelope around failure points (orange, transparent)
+            fail_df = sc_df[sc_df["failure_label"] == "Failure"]
+            if not fail_df.empty:
+                x_min, x_max = fail_df["tool_wear_min"].min(), fail_df["tool_wear_min"].max()
+                y_min, y_max = fail_df["torque_nm"].min(), fail_df["torque_nm"].max()
+                pad_x = max((x_max - x_min) * 0.05, 1.0)
+                pad_y = max((y_max - y_min) * 0.05, 0.5)
+                typ_fig.add_shape(
+                    type="rect",
+                    x0=x_min - pad_x, x1=x_max + pad_x,
+                    y0=y_min - pad_y, y1=y_max + pad_y,
+                    fillcolor="rgba(255, 152, 0, 0.6)",
+                    line=dict(width=0),
+                    layer="below",
+                )
             typ_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
             # --- Anomaly table ---
