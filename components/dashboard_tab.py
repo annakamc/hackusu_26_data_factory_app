@@ -112,15 +112,17 @@ def build(summary: dict) -> list:
             )
             fm_fig.update_layout(coloraxis_showscale=False, showlegend=False)
 
-            # --- RUL health buckets pie ---
+            # --- RUL health buckets: vertical bar chart (ascending), same colors/classes ---
             rul_df  = db_service.get_engine_rul_buckets()
-            rul_fig = px.pie(
-                rul_df, names="bucket", values="count",
+            rul_df = rul_df.sort_values("count", ascending=True).reset_index(drop=True)
+            rul_fig = px.bar(
+                rul_df, x="bucket", y="count",
                 color="bucket",
                 color_discrete_map=_STATUS_COLORS,
                 title="Engine Health Distribution",
-                hole=0.4,
+                labels={"bucket": "Health Status", "count": "Engines"},
             )
+            rul_fig.update_layout(showlegend=False)
 
             # --- Torque vs RPM scatter ---
             sc_df    = db_service.get_cnc_scatter_data(limit=2000)
