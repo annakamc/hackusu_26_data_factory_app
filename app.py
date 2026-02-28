@@ -105,25 +105,25 @@ with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:
         # Main content: tabs
         with gr.Column(scale=12):
             with gr.Tabs():
-                with gr.Tab("Overview") as tab_overview:
+                with gr.Tab("Overview", visible=False) as tab_overview:
                     dashboard_outputs, dashboard_load_fn = dashboard_tab.build(summary)
 
-                with gr.Tab("CNC Analysis") as tab_cnc:
+                with gr.Tab("CNC Analysis", visible=False) as tab_cnc:
                     cnc_tab.build()
 
-                with gr.Tab("Engine Health") as tab_engine:
+                with gr.Tab("Engine Health", visible=False) as tab_engine:
                     engine_tab.build()
 
-                with gr.Tab("Electrical Monitor") as tab_electrical:
+                with gr.Tab("Electrical Monitor", visible=False) as tab_electrical:
                     electrical_tab.build()
 
-                with gr.Tab("Audit Log") as tab_audit:
+                with gr.Tab("Audit Log", visible=False) as tab_audit:
                     audit_tab.build()
 
-                with gr.Tab("Admin") as tab_admin:
+                with gr.Tab("Admin", visible=False) as tab_admin:
                     admin_tab.build()
 
-                with gr.Tab("Request Access") as tab_request:
+                with gr.Tab("Request Access", visible=False) as tab_request:
                     request_access_outputs, request_access_load_fn = request_access_tab.build()
 
         # Side panel: chat UI (hidden by default, toggled by button)
