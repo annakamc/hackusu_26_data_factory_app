@@ -93,6 +93,7 @@ def build(summary: dict) -> list:
         try:
             # --- Failure modes bar chart ---
             fm_df  = db_service.get_cnc_failure_modes()
+            fm_df = fm_df.sort_values("count", ascending=True).reset_index(drop=True)
             fm_fig = px.bar(
                 fm_df, x="failure_mode", y="count",
                 color="count", color_continuous_scale="Reds",
