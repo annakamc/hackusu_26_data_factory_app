@@ -85,7 +85,6 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             type="messages",
             render_markdown=True,
             show_label=False,
-            feedback_options=("Like", "Dislike"),
         )
         msg_box = gr.Textbox(
             placeholder="e.g. Which CNC machines have the most tool wear failures?",
