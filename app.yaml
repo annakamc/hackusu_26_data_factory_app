@@ -1,0 +1,17 @@
+command: ["python", "app.py"]
+
+env:
+  - name: "DATABRICKS_HOST"
+    value: "https://dbc-e6423d11-7a6d.cloud.databricks.com"
+  - name: "DATABRICKS_WAREHOUSE_ID"
+    value: "7474647584281863"
+  - name: "DATABRICKS_CATALOG"
+    value: "dataknobs_predictive_maintenance_and_asset_management"
+  - name: "DATABRICKS_SCHEMA"
+    value: "datasets"
+  - name: "GENIE_SPACE_ID"
+    value: "01f1146216f310d795689439cbb2dbd7"
+  - name: "BEDROCK_REGION"
+    value: "us-east-1"
+  - name: "USE_MOCK_AI"
+    value: "false"
