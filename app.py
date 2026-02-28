@@ -78,39 +78,59 @@ except Exception:
 _CSS = """
 footer {visibility: hidden}
 .kpi-value { font-size: 2rem; font-weight: 700; }
+/* Fixed bottom-left chat toggle button — visible on every tab */
+#chat-toggle-btn { position: fixed; bottom: 20px; left: 20px; z-index: 1000; }
+#chat-side-panel { max-width: 420px; }
 """
 
 with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:
 
     # Per-session state
-    conv_id_state = gr.State(None)   # Genie conversation ID
+    conv_id_state = gr.State(None)       # Genie conversation ID
+    panel_visible = gr.State(False)      # Side panel open/closed
 
     gr.Markdown(
         "# Predictive Maintenance Intelligence Hub\n"
         "_Powered by Databricks Unity Catalog · AI/BI Genie · Bedrock_"
     )
 
-    with gr.Tabs():
-        with gr.Tab("Overview"):
-            dashboard_outputs, dashboard_load_fn = dashboard_tab.build(summary)
+    with gr.Row():
+        # Main content: tabs only (no "Ask Your Data" tab)
+        with gr.Column(scale=12):
+            with gr.Tabs():
+                with gr.Tab("Overview"):
+                    dashboard_outputs, dashboard_load_fn = dashboard_tab.build(summary)
 
-        with gr.Tab("CNC Analysis"):
-            cnc_tab.build()
+                with gr.Tab("CNC Analysis"):
+                    cnc_tab.build()
 
-        with gr.Tab("Engine Health"):
-            engine_tab.build()
+                with gr.Tab("Engine Health"):
+                    engine_tab.build()
 
-        with gr.Tab("Electrical Monitor"):
-            electrical_tab.build()
+                with gr.Tab("Electrical Monitor"):
+                    electrical_tab.build()
 
-        with gr.Tab("Ask Your Data"):
+                with gr.Tab("Audit Log"):
+                    audit_tab.build()
+
+                with gr.Tab("Admin"):
+                    admin_tab.build()
+
+        # Side panel: chat UI (hidden by default, toggled by button)
+        with gr.Column(scale=4, visible=False, elem_id="chat-side-panel") as chat_panel:
             chat_tab.build(conv_id_state, schema_ctx)
 
-        with gr.Tab("Audit Log"):
-            audit_tab.build()
+    # Toggle button: fixed bottom-left, opens/closes chat panel
+    toggle_btn = gr.Button("Chat", variant="secondary", elem_id="chat-toggle-btn")
 
-        with gr.Tab("Admin"):
-            admin_tab.build()
+    def toggle_panel(visible):
+        return not visible, gr.update(visible=not visible)
+
+    toggle_btn.click(
+        fn=toggle_panel,
+        inputs=[panel_visible],
+        outputs=[panel_visible, chat_panel],
+    )
 
     # Auto-load Overview charts when page first opens
     demo.load(fn=dashboard_load_fn, outputs=dashboard_outputs)

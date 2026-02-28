@@ -10,3 +10,7 @@ dist/
 build/
 .venv/
 venv/
+
+/docs/cadens_notes.md
+
+.cursorrules

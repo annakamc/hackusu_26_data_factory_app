@@ -16,7 +16,7 @@ _PAGES = [
     {"page": "CNC Analysis",        "category": "main",  "enabled": True},
     {"page": "Engine Health",       "category": "main",  "enabled": True},
     {"page": "Electrical Monitor",  "category": "main",  "enabled": True},
-    {"page": "Ask Your Data",       "category": "main",  "enabled": True},
+    {"page": "Chat (panel)",        "category": "main",  "enabled": True},
     {"page": "Audit Log",           "category": "main",  "enabled": True},
     {"page": "Admin",               "category": "system","enabled": True},
 ]

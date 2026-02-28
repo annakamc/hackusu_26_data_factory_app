@@ -4,13 +4,13 @@ users: {}  # populated by IT: email -> role
 
 roles:
   viewer:
-    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data"]
+    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor"]
     can_export: false
     can_see_pii: false
     row_limit: 500
 
   analyst:
-    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data", "Audit Log"]
+    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Audit Log"]
     can_export: true
     can_see_pii: false
     row_limit: 5000

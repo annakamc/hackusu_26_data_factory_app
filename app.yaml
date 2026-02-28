@@ -2,15 +2,15 @@ command: ["python", "app.py"]
 
 env:
   - name: "DATABRICKS_HOST"
-    value: "https://dbc-e6423d11-7a6d.cloud.databricks.com"
+    value: "https://dbc-ad3c1cf3-8c4e.cloud.databricks.com"
   - name: "DATABRICKS_WAREHOUSE_ID"
-    value: "fbb75eda5384ec88"
+    value: "dbe4e9c258a53bdf"
   - name: "DATABRICKS_CATALOG"
     value: "dataknobs_predictive_maintenance_and_asset_management"
   - name: "DATABRICKS_SCHEMA"
     value: "datasets"
   - name: "GENIE_SPACE_ID"
-    value: "01f1146216f310d795689439cbb2dbd7"
+    value: "01f1147bd659157cb3fb6a0a74e58e23"
   - name: "BEDROCK_REGION"
     value: "us-east-1"
   - name: "USE_MOCK_AI"
