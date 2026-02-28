@@ -40,13 +40,14 @@ def _genie_headers() -> dict:
     """Build Genie request headers with a freshly resolved token.
 
     Preference order:
-      1. DATABRICKS_TOKEN env var (local dev / explicit override)
-      2. Databricks secrets: dbutils.secrets.get(scope="hackusu", key="genietoken")
-      3. databricks-sdk Config() — picks up Databricks Apps OAuth automatically
+      1. GENIE_TOKEN env (deployed app: from secret resource; avoids PAT vs OAuth conflict)
+      2. DATABRICKS_TOKEN env (local dev)
+      3. dbutils.secrets.get(scope="hackusu", key="genietoken")
+      4. databricks-sdk Config()
     """
     # #region agent log
-    token = os.getenv("DATABRICKS_TOKEN", "")
-    token_source = "env" if token else ""
+    token = os.getenv("GENIE_TOKEN", "") or os.getenv("DATABRICKS_TOKEN", "")
+    token_source = "env_genie" if os.getenv("GENIE_TOKEN") else ("env" if os.getenv("DATABRICKS_TOKEN") else "")
     _debug_log("ai_service._genie_headers:env", "Token from env", {"env_token_set": bool(token), "env_token_len": len(token) if token else 0}, "H1")
     # #endregion
     if not token:
@@ -66,13 +67,6 @@ def _genie_headers() -> dict:
     if not token:
         # #region agent log
         config_has_token = False
-        try:
-            # In Databricks runtime (notebooks, jobs, apps) dbutils may be available
-            dbutils = __import__("dbutils")
-            token = dbutils.secrets.get(scope="hackusu", key="genietoken")
-        except (NameError, AttributeError, Exception):
-            pass
-    if not token:
         try:
             from databricks.sdk.core import Config
             token = Config().token or ""

@@ -15,6 +15,6 @@ env:
     value: "us-east-1"
   - name: "USE_MOCK_AI"
     value: "false"
-  # Genie API token: set from secret resource (add Secret resource in App UI: scope=hackusu, key=genietoken, resource key=secret)
-  - name: "DATABRICKS_TOKEN"
+  # Genie API only (avoids PAT vs OAuth conflict): set from secret resource (scope=hackusu, key=genietoken, resource key=secret)
+  - name: "GENIE_TOKEN"
     valueFrom: secret
