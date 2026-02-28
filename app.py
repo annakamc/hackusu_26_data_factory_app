@@ -120,6 +120,9 @@ footer {visibility: hidden}
 /* No gap between chat buttons and Answered by: Genie */
 #chat-buttons-row { margin-bottom: 0 !important; }
 #chat-source-label { margin-top: 0 !important; padding-top: 0 !important; }
+/* No gap between chat panel and Example questions */
+#chat-panel-column { margin-bottom: 0 !important; padding-bottom: 0 !important; }
+#example-questions-section { margin-top: 0 !important; padding-top: 0 !important; }
 """
 
 with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:

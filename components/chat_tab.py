@@ -78,7 +78,7 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
     gr.Markdown("_Data questions may take 5–15 seconds while we query your data._")
 
     # Conversation window: chat + input and buttons at the bottom
-    with gr.Column(variant="panel"):
+    with gr.Column(variant="panel", elem_id="chat-panel-column"):
         chatbot = gr.Chatbot(
             label="",
             height=400,
@@ -96,13 +96,14 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             clear_btn = gr.Button("Clear Chat", variant="secondary")
         source_label = gr.Markdown("", elem_id="chat-source-label")
 
-    gr.Markdown("**Example questions:**")
-    with gr.Row():
-        for q in _EXAMPLE_QUESTIONS[:3]:
-            gr.Button(q, size="sm").click(
-                fn=lambda question=q: question,
-                outputs=[msg_box],
-            )
+    with gr.Column(elem_id="example-questions-section"):
+        gr.Markdown("**Example questions:**")
+        with gr.Row():
+            for q in _EXAMPLE_QUESTIONS[:3]:
+                gr.Button(q, size="sm").click(
+                    fn=lambda question=q: question,
+                    outputs=[msg_box],
+                )
 
     # ── Respond handler ────────────────────────────────────────────────────────
     def respond(message: str, history: list, conv_id: str | None,
