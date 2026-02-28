@@ -4,8 +4,8 @@ admin_email: annakamcclelland@gmail.com
 
 users:
   annakamcclelland@gmail.com: admin
-  deathrizzle4898@gmail.com: viewer
-  cadenjbaird@gmail.com: analyst
+  deathrizzle4898@gmail.com: analyst
+  cadenjbaird@gmail.com: viewer
 
 roles:
   no_access:
@@ -14,7 +14,7 @@ roles:
     can_see_pii: false
 
   viewer:
-    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data"]
+    tabs: ["Overview", "CNC Analysis", "Engine Health", "Heater Health", "Electrical Monitor", "Ask Your Data"]
     can_export: false
     can_see_pii: false
     row_limit: 500
