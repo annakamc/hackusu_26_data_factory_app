@@ -57,24 +57,35 @@ def build() -> None:
         role  = user["role"]  if user else "viewer"
 
         try:
-            # ── Chart 1: Fault Type — horizontal bar (replaces pie) ───────────
+            # ── Chart 1: Fault Type — vertical bar chart ─────────────────────
             fault_df  = db_service.get_electrical_fault_summary()
-            fault_df  = fault_df.sort_values("count", ascending=True)
-            fault_fig = px.bar(
-                fault_df, x="count", y="fault_type",
-                orientation="h",
-                title="Fault Type Distribution",
-                labels={"count": "Number of Events", "fault_type": ""},
-                color="count",
-                color_continuous_scale="Reds",
-                text="count",
-            )
-            fault_fig.update_traces(textposition="outside")
+            fault_df  = fault_df.sort_values("count", ascending=False).reset_index(drop=True)
+
+            _fault_palette = ["#43A047", "#1976D2", "#E53935", "#FB8C00"]
+
+            fault_fig = go.Figure()
+            for i, row in fault_df.iterrows():
+                fault_fig.add_trace(go.Bar(
+                    x=[row["fault_type"]],
+                    y=[row["count"]],
+                    name=row["fault_type"],
+                    marker_color=_fault_palette[i % len(_fault_palette)],
+                    text=[row["count"]],
+                    textposition="outside",
+                    textfont=dict(size=12),
+                    hovertemplate=f"<b>{row['fault_type']}</b><br>Count: {row['count']}<extra></extra>",
+                    width=0.6,
+                ))
+
             fault_fig.update_layout(
-                coloraxis_showscale=False,
-                margin=dict(l=160, r=40, t=50, b=40),
-                xaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
-                yaxis=dict(tickfont=dict(size=11)),
+                title="Fault Type Distribution",
+                xaxis_title="",
+                yaxis_title="Number of Events",
+                showlegend=False,
+                margin=dict(l=50, r=40, t=50, b=120),
+                xaxis=dict(tickangle=-30, tickfont=dict(size=11)),
+                yaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
+                bargap=0.3,
             )
 
             # Phase scatter data
