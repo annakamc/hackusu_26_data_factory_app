@@ -49,6 +49,7 @@ from components import (
     audit_tab,
     admin_tab,
     request_access_tab,
+    heater_tab,           # ← add this
 )
 
 # Workaround: Gradio 4.44.x / gradio_client crash when API schema has a boolean
@@ -79,7 +80,7 @@ except Exception:
 _ROLES_PATH = Path("governance") / "roles.yaml"
 
 # Tab names that map to role config in roles.yaml
-_TAB_NAMES = ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Audit Log", "Admin"]
+_TAB_NAMES = ["Overview", "CNC Analysis", "Engine Health", "Heater Health", "Electrical Monitor", "Audit Log", "Admin"]
 
 # ── App layout ─────────────────────────────────────────────────────────────────
 _CSS = """
@@ -157,6 +158,9 @@ with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:
                 with gr.Tab("Engine Health", visible=False) as tab_engine:
                     engine_tab.build()
 
+                with gr.Tab("Heater Health", visible=False) as tab_heater:
+                    heater_tab.build()
+
                 with gr.Tab("Electrical Monitor", visible=False) as tab_electrical:
                     electrical_tab.build()
 
@@ -186,7 +190,7 @@ with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:
     )
 
     # ── Role-based tab visibility + initial data load ──────────────────────────
-    _regular_tabs = [tab_overview, tab_cnc, tab_engine, tab_electrical, tab_audit, tab_admin]
+    _regular_tabs = [tab_overview, tab_cnc, tab_engine, tab_heater, tab_electrical, tab_audit, tab_admin]
 
     def on_page_load(request: gr.Request):
         user = auth_service.get_user_from_request(request)
