@@ -1,0 +1,29 @@
+UDI
+bigint
+Product ID
+string
+Type
+string
+Air temperature [K]
+double
+Process temperature [K]
+double
+Rotational speed [rpm]
+bigint
+Torque [Nm]
+double
+Tool wear [min]
+bigint
+Machine failure
+bigint
+TWF
+bigint
+HDF
+bigint
+PWF
+bigint
+OSF
+bigint
+RNF
+bigint
+A
