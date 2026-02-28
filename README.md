@@ -10,7 +10,7 @@
 - set up MCP (Model Context Protocol) server is a lightweight, standardized program that acts as a connector, allowing AI models (LLMs) to securely access external data sources, APIs, and tools
 - 
 
-Requested Core Features:
+## Requested Core Features:
 
 1. Governed Data Access
    - Connect to Unity Catalog tables 
@@ -38,7 +38,7 @@ Requested Core Features:
    - Establish data quality rules
    - Create approval workflow (can be conceptual)
 
-Stretch Goals Hit:
+## Stretch Goals Hit:
   - Multi-page application with navigation
   - Real-time data updates
   - Export functionality (CSV, PDF)
@@ -47,7 +47,7 @@ Stretch Goals Hit:
   - Predictive analytics or ML models
   - Workflow orchestration
 
-Other Stretch Goals Hit:
+## Other Stretch Goals Hit:
   - Creation of artificial data
   - 
 
