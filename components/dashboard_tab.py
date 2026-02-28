@@ -10,9 +10,10 @@ from services import db_service, auth_service, audit_service
 logger = logging.getLogger(__name__)
 
 _STATUS_COLORS = {
-    "Critical (<50)":  "#E53935",
-    "Warning (50-99)": "#FB8C00",
-    "Healthy (≥100)":  "#43A047",
+    "Failure imminent (<20)": "#B71C1C",
+    "Critical (20-49)":       "#E53935",
+    "Warning (50-125)":       "#FB8C00",
+    "Safe (>125)":            "#43A047",
 }
 
 
