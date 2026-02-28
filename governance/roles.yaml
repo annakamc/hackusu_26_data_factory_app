@@ -1,6 +1,8 @@
 default_role: viewer
 
-users: {}  # populated by IT: email -> role
+users: 
+  bracken576@outlook.com: analyst
+  annakamcclelland@gmail.com: admin
 
 roles:
   viewer:
