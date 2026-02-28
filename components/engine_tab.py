@@ -313,9 +313,9 @@ def build() -> None:
 
             return (
                 trend_fig, bucket_fig, sensor_fig, stat_fig, eng_df,
-                f"### Critical Engines\n# **{critical}**",
-                f"### Warning Engines\n# **{warning}**",
-                f"### Healthy Engines\n# **{healthy}**",
+                f"### Critical Engines\n# **{critical:,}**",
+                f"### Warning Engines\n# **{warning:,}**",
+                f"### Healthy Engines\n# **{healthy:,}**",
                 f"### Fleet Avg RUL\n# **{avg_rul} cycles**",
                 "",
                 scatter_raw,
