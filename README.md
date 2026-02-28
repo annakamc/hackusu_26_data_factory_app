@@ -13,30 +13,30 @@
 Requested Core Features:
 
 1. Governed Data Access
-   -Connect to Unity Catalog tables
-   -Demonstrate data lineage
-   -Show at least one security feature (row-level security, column masking, or access audit)
+   - Connect to Unity Catalog tables 
+   - Demonstrate data lineage
+   - Show at least one security feature (row-level security, column masking, or access audit)
 
-2. Visual Dashboard
+3. Visual Dashboard
    - Minimum 3 different visualization types (bar chart, line chart, pie chart)
    - At least 5 KPIs or metrics
    - Interactive elements(filters, drill-downs, date ranges)
   
-3. Conversational Interface
+4. Conversational Interface
    - Text-based chat interface
    - Ability to ask questions in natural language
    - Return data-driven answers
    - Display results as text AND visualizations
   
-4. Steering Documents
+5. Steering Documents
    - Document your app template structure
    - Define guardrails (data access, security policies)
    - Create user guide for business users
   
-5. Governance Framework
-  - Define roles and permissions
-  - Establish data quality rules
-  - Create approval workflow (can be conceptual)
+6. Governance Framework
+   - Define roles and permissions
+   - Establish data quality rules
+   - Create approval workflow (can be conceptual)
 
 Stretch Goals Hit:
   - Multi-page application with navigation
