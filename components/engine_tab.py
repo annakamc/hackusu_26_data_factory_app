@@ -187,6 +187,7 @@ def build() -> None:
                 SELECT id AS engine_id, Cycle AS cycle, {", ".join(VARYING_SENSORS)}
                 FROM {db_service._ENG_TBL}
                 ORDER BY id, Cycle
+                LIMIT 2000
             """)
 
             bucket_fig = _build_sensor_scatter(
