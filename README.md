@@ -1,4 +1,4 @@
-# HackUSU Gone Phishing Coch Data Competition 
+# HackUSU Gone Phishing Koch Data Competition 
 
 ## Requested Core Features:
 
