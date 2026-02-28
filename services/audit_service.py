@@ -14,6 +14,7 @@ _FIELDS = [
     "timestamp", "session_id", "user_email", "user_role",
     "action_type", "ai_source", "source_tables",
     "query_text", "row_count", "execution_time_ms", "pii_accessed", "error",
+    "message_index", "liked",
 ]
 
 _session_id = str(uuid.uuid4())  # one ID per app process
@@ -21,6 +22,25 @@ _session_id = str(uuid.uuid4())  # one ID per app process
 
 def _ensure_log_file() -> None:
     _LOG_DIR.mkdir(exist_ok=True)
+    if _LOG_PATH.exists():
+        try:
+            with open(_LOG_PATH, "r", newline="", encoding="utf-8") as f:
+                first_line = f.readline()
+            if "message_index" not in first_line:
+                with open(_LOG_PATH, "r", newline="", encoding="utf-8") as f:
+                    reader = csv.DictReader(f)
+                    old_fields = reader.fieldnames or []
+                    rows = list(reader)
+                with open(_LOG_PATH, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.DictWriter(f, fieldnames=_FIELDS, extrasaction="ignore")
+                    writer.writeheader()
+                    for row in rows:
+                        for k in _FIELDS:
+                            if k not in row:
+                                row[k] = ""
+                        writer.writerow({k: row.get(k, "") for k in _FIELDS})
+        except Exception as exc:
+            logger.warning("Audit log migration skipped: %s", exc)
     if not _LOG_PATH.exists():
         with open(_LOG_PATH, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=_FIELDS)
@@ -38,6 +58,8 @@ def log_event(
     execution_time_ms: int = 0,
     pii_accessed: bool = False,
     error: str = "",
+    message_index: int | None = None,
+    liked: bool | None = None,
 ) -> None:
     """Append one event to the audit trail. Non-blocking — errors are logged but not raised."""
     try:
@@ -55,6 +77,8 @@ def log_event(
             "execution_time_ms": execution_time_ms,
             "pii_accessed": pii_accessed,
             "error": error[:200],
+            "message_index": message_index if message_index is not None else "",
+            "liked": liked if liked is not None else "",
         }
         with open(_LOG_PATH, "a", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=_FIELDS)

@@ -85,6 +85,7 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             type="messages",
             render_markdown=True,
             show_label=False,
+            feedback_options=("Like", "Dislike"),
         )
         msg_box = gr.Textbox(
             placeholder="e.g. Which CNC machines have the most tool wear failures?",
@@ -176,4 +177,43 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
     clear_btn.click(
         fn=lambda: ([], "", None, ""),
         outputs=[chatbot, msg_box, conv_id_state, source_label],
+    )
+
+    # ── Feedback handler (Like/Dislike on assistant messages) ────────────────────
+    def on_feedback(
+        _chatbot_value: list,
+        like_data: gr.LikeData,
+        conv_id: str | None,
+        request: gr.Request,
+    ) -> None:
+        """Log FEEDBACK to audit trail when user likes/dislikes an assistant message."""
+        try:
+            idx = like_data.index
+            if isinstance(idx, tuple):
+                idx = idx[0] if idx else 0
+            else:
+                idx = int(idx) if idx is not None else 0
+            liked = like_data.liked
+            if isinstance(liked, str):
+                liked = liked.strip().lower() in ("true", "like", "1", "yes")
+            else:
+                liked = bool(liked)
+            user = auth_service.get_user_from_request(request)
+            email = user["email"] if user else "unknown"
+            role = user["role"] if user else "viewer"
+            audit_service.log_event(
+                action_type="FEEDBACK",
+                user_email=email,
+                user_role=role,
+                query_text=conv_id or "",
+                message_index=idx,
+                liked=liked,
+            )
+        except Exception as exc:
+            logger.warning("Feedback logging failed: %s", exc)
+
+    chatbot.like(
+        on_feedback,
+        inputs=[chatbot, conv_id_state],
+        outputs=[],
     )
