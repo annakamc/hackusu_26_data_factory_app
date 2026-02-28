@@ -27,9 +27,17 @@ def _genie_headers() -> dict:
 
     Preference order:
       1. DATABRICKS_TOKEN env var (local dev / explicit override)
-      2. databricks-sdk Config() — picks up Databricks Apps OAuth automatically
+      2. Databricks secrets: dbutils.secrets.get(scope="hackusu", key="genietoken")
+      3. databricks-sdk Config() — picks up Databricks Apps OAuth automatically
     """
     token = os.getenv("DATABRICKS_TOKEN", "")
+    if not token:
+        try:
+            # In Databricks runtime (notebooks, jobs, apps) dbutils may be available
+            dbutils = __import__("dbutils")
+            token = dbutils.secrets.get(scope="hackusu", key="genietoken")
+        except (NameError, AttributeError, Exception):
+            pass
     if not token:
         try:
             from databricks.sdk.core import Config
