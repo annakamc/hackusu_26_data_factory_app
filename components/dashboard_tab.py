@@ -78,7 +78,7 @@ def build(summary: dict) -> list:
 
     with gr.Row():
         torque_chart  = gr.Plot(label="Torque vs RPM (coloured by failure)")
-        type_chart    = gr.Plot(label="Tool Wear vs Torque by Machine Type")
+        type_chart    = gr.Plot(label="Tool Wear vs Torque (coloured by failure)")
 
     # Anomaly alert banner
     gr.Markdown("### ⚠️ Anomaly Alerts (tool wear > 200 min or torque > 65 Nm)")
@@ -136,16 +136,17 @@ def build(summary: dict) -> list:
                         "failure_label": "Status"},
             )
 
-            # --- Tool Wear vs Torque by Machine Type (record-level scatter) ---
+            # --- Tool Wear vs Torque coloured by failure (failure zone) ---
             typ_fig = px.scatter(
                 sc_df, x="tool_wear_min", y="torque_nm",
-                color="machine_type",
+                color="failure_label",
+                color_discrete_map={"Normal": "#43A047", "Failure": "#E53935"},
                 opacity=0.6,
-                title="Tool Wear vs Torque by Machine Type",
+                title="Tool Wear vs Torque (coloured by failure)",
                 labels={
                     "tool_wear_min": "Tool Wear (min)",
                     "torque_nm": "Torque (Nm)",
-                    "machine_type": "Machine Type",
+                    "failure_label": "Status",
                 },
             )
             typ_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
