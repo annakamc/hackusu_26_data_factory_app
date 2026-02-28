@@ -73,7 +73,7 @@ def build() -> None:
                        ROUND(AVG(Current_measured), 4)     AS avg_current,
                        ROUND(AVG(Voltage_charge), 4)       AS avg_voltage_charge,
                        COUNT(*)                            AS readings
-                FROM {db_service._HEATER_TBL}
+                FROM dataknobs_predictive_maintenance_and_asset_management.datasets.heater_validation_data
                 GROUP BY PhID, id_cycle, Time
                 ORDER BY PhID, id_cycle
             """)
@@ -240,7 +240,7 @@ def build() -> None:
             audit_service.log_event(
                 action_type="QUERY",
                 user_email=email, user_role=role,
-                source_tables=db_service._HEATER_TBL,
+                source_tables="dataknobs_predictive_maintenance_and_asset_management.datasets.heater_validation_data",
                 query_text="Heater health tab load",
                 row_count=len(df),
             )
