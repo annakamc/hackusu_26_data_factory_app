@@ -143,6 +143,13 @@ def chat_with_data(
                 return _start_genie(question)
         except Exception as exc:
             logger.warning("Genie failed (%s), falling back to Bedrock: %s", type(exc).__name__, exc)
+            # #region agent log
+            err_data = {"exc_type": type(exc).__name__, "exc_msg": str(exc)[:500]}
+            if hasattr(exc, "response") and exc.response is not None:
+                err_data["status_code"] = getattr(exc.response, "status_code", None)
+                err_data["response_text"] = (getattr(exc.response, "text", None) or "")[:300]
+            _debug_log("ai_service.chat_with_data:genie_exc", "Genie exception (before Bedrock fallback)", err_data, "GENIE_FAIL")
+            # #endregion
 
     # Tier 2: Bedrock
     try:
