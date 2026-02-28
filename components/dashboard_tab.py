@@ -100,6 +100,14 @@ def build(summary: dict) -> list:
                 title="CNC Failure Mode Breakdown",
                 labels={"failure_mode": "Failure Mode", "count": "Incidents"},
             )
+            # First bar (least incidents) slightly darker but barely lighter than second
+            n_bars = len(fm_df)
+            first_color = "#FCBEAC"   # barely lighter than second
+            second_color = "#FCB59D"
+            rest_colors = ["#FB6A4A", "#DE2D26", "#A50F15"][: max(0, n_bars - 2)]
+            fm_fig.update_traces(
+                marker_color=[first_color, second_color] + rest_colors
+            )
             fm_fig.update_layout(coloraxis_showscale=False, showlegend=False)
 
             # --- RUL health buckets pie ---
