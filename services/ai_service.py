@@ -83,6 +83,8 @@ def _genie_headers() -> dict:
     # #region agent log
     _debug_log("ai_service._genie_headers:exit", "Final token source", {"token_source": token_source, "token_len": len(token) if token else 0}, "H5")
     # #endregion
+    if token:
+        token = token.strip()
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
