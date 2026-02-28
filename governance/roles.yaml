@@ -5,7 +5,7 @@ admin_email: annakamcclelland@gmail.com
 users:
   annakamcclelland@gmail.com: admin
   deathrizzle4898@gmail.com: admin
-  cadenjbaird@gmail.com: viewer
+  cadenjbaird@gmail.com: no_access
   bracken576@outlook.com: admin
 
 roles:
