@@ -15,15 +15,29 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 DATABRICKS_HOST  = os.getenv("DATABRICKS_HOST", "")
-DATABRICKS_TOKEN = os.getenv("DATABRICKS_TOKEN", "")
 GENIE_SPACE_ID   = os.getenv("GENIE_SPACE_ID", "")
 BEDROCK_REGION   = os.getenv("BEDROCK_REGION", "us-east-1")
 USE_MOCK         = os.getenv("USE_MOCK_AI", "false").lower() == "true"
 
-GENIE_HEADERS = {
-    "Authorization": f"Bearer {DATABRICKS_TOKEN}",
-    "Content-Type": "application/json",
-}
+
+def _genie_headers() -> dict:
+    """Build Genie request headers with a freshly resolved token.
+
+    Preference order:
+      1. DATABRICKS_TOKEN env var (local dev / explicit override)
+      2. databricks-sdk Config() — picks up Databricks Apps OAuth automatically
+    """
+    token = os.getenv("DATABRICKS_TOKEN", "")
+    if not token:
+        try:
+            from databricks.sdk.core import Config
+            token = Config().token or ""
+        except Exception:
+            pass
+    return {
+        "Authorization": f"Bearer {token}",
+        "Content-Type": "application/json",
+    }
 
 BLOCKED_SQL_KEYWORDS = {
     "INSERT", "UPDATE", "DELETE", "DROP", "TRUNCATE",
@@ -80,7 +94,7 @@ def chat_with_data(
 # ── Tier 1: Genie ─────────────────────────────────────────────────────────────
 def _start_genie(question: str) -> ChatResponse:
     url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation"
-    resp = requests.post(url, headers=GENIE_HEADERS, json={"content": question}, timeout=30)
+    resp = requests.post(url, headers=_genie_headers(), json={"content": question}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
     return _poll_genie(data["conversation_id"], data["message_id"])
@@ -89,7 +103,7 @@ def _start_genie(question: str) -> ChatResponse:
 def _continue_genie(conversation_id: str, question: str) -> ChatResponse:
     url = (f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}"
            f"/conversations/{conversation_id}/messages")
-    resp = requests.post(url, headers=GENIE_HEADERS, json={"content": question}, timeout=30)
+    resp = requests.post(url, headers=_genie_headers(), json={"content": question}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
     return _poll_genie(conversation_id, data["message_id"])
@@ -100,7 +114,7 @@ def _poll_genie(conversation_id: str, message_id: str, max_wait: int = 60) -> Ch
            f"/conversations/{conversation_id}/messages/{message_id}")
     wait, elapsed = 1, 0
     while elapsed < max_wait:
-        data = requests.get(url, headers=GENIE_HEADERS, timeout=10).json()
+        data = requests.get(url, headers=_genie_headers(), timeout=10).json()
         status = data.get("status")
         if status == "COMPLETED":
             text, sql = "", None
