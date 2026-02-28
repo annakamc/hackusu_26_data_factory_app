@@ -25,7 +25,7 @@ def build() -> None:
 
     with gr.Row():
         action_filter = gr.Dropdown(
-            choices=["All", "QUERY", "CHAT", "EXPORT", "LOGIN",
+            choices=["All", "QUERY", "CHAT", "FEEDBACK", "EXPORT", "LOGIN",
                      "ACCESS_DENIED", "QUERY_FAILED"],
             value="All",
             label="Filter by Action",
@@ -51,6 +51,21 @@ def build() -> None:
         df = audit_service.read_audit_log(limit=500)
         if action_type_filter != "All" and len(df) > 0:
             df = df[df["action_type"] == action_type_filter]
+        # Format feedback for display: show "Like" / "Dislike" in liked column
+        if "liked" in df.columns and "action_type" in df.columns and len(df) > 0:
+            df = df.copy()
+            feedback_mask = df["action_type"] == "FEEDBACK"
+            if feedback_mask.any():
+                def _format_liked(val):
+                    if pd.isna(val) or val == "":
+                        return ""
+                    s = str(val).strip().lower()
+                    if s in ("true", "1"):
+                        return "Like"
+                    if s in ("false", "0"):
+                        return "Dislike"
+                    return val
+                df.loc[feedback_mask, "liked"] = df.loc[feedback_mask, "liked"].apply(_format_liked)
         return df, gr.update(visible=False), f"Showing {len(df):,} entries."
 
     def export_log(request: gr.Request):

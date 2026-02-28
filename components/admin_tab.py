@@ -122,13 +122,29 @@ def build() -> None:
             pii_accessed=True,
         )
 
+        # Format liked column for display in recent table (Like/Dislike for FEEDBACK)
+        display_df = df.head(100).copy()
+        if "liked" in display_df.columns and "action_type" in display_df.columns:
+            feedback_mask = display_df["action_type"] == "FEEDBACK"
+            if feedback_mask.any():
+                def _format_liked(val):
+                    if pd.isna(val) or val == "":
+                        return ""
+                    s = str(val).strip().lower()
+                    if s in ("true", "1"):
+                        return "Like"
+                    if s in ("false", "0"):
+                        return "Dislike"
+                    return val
+                display_df.loc[feedback_mask, "liked"] = display_df.loc[feedback_mask, "liked"].apply(_format_liked)
+
         return (
             f"### Total Queries\n# **{total_q:,}**",
             f"### Chat Interactions\n# **{total_c:,}**",
             f"### Access Denied\n# **{denied:,}**",
             f"### Query Errors\n# **{errors:,}**",
             act_fig, ai_fig,
-            df.head(100),
+            display_df,
             f"Loaded at {datetime.now(timezone.utc).strftime('%H:%M UTC')}",
         )
 

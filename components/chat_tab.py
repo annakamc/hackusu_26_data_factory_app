@@ -79,13 +79,25 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
 
     # Conversation window: chat + input and buttons at the bottom
     with gr.Column(variant="panel", elem_id="chat-panel-column"):
-        chatbot = gr.Chatbot(
-            label="",
-            height=400,
-            type="messages",
-            render_markdown=True,
-            show_label=False,
-        )
+        # like_user_message=False hides like/dislike on user messages (Gradio 4.45+);
+        # older Gradio ignores it via try/except
+        try:
+            chatbot = gr.Chatbot(
+                label="",
+                height=400,
+                type="messages",
+                render_markdown=True,
+                show_label=False,
+                like_user_message=False,
+            )
+        except TypeError:
+            chatbot = gr.Chatbot(
+                label="",
+                height=400,
+                type="messages",
+                render_markdown=True,
+                show_label=False,
+            )
         msg_box = gr.Textbox(
             placeholder="e.g. Which CNC machines have the most tool wear failures?",
             label="Your question",
@@ -192,6 +204,12 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
                 idx = idx[0] if idx else 0
             else:
                 idx = int(idx) if idx is not None else 0
+            # Only allow feedback on assistant messages, not user messages
+            if not _chatbot_value or idx < 0 or idx >= len(_chatbot_value):
+                return
+            msg = _chatbot_value[idx]
+            if not isinstance(msg, dict) or msg.get("role") != "assistant":
+                return
             liked = like_data.liked
             if isinstance(liked, str):
                 liked = liked.strip().lower() in ("true", "like", "1", "yes")
