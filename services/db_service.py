@@ -124,7 +124,8 @@ def get_summary_kpis() -> dict:
         eng = _sql_query(f"""
             SELECT
                 ROUND(AVG(CAST(RemainingUsefulLife AS FLOAT)), 0) AS avg_rul,
-                SUM(CASE WHEN RemainingUsefulLife < 50 THEN 1 ELSE 0 END) AS critical_engines,
+                SUM(CASE WHEN RemainingUsefulLife < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
+                SUM(CASE WHEN RemainingUsefulLife >= 20 AND RemainingUsefulLife < 50 THEN 1 ELSE 0 END) AS critical_engines,
                 COUNT(DISTINCT id) AS total_engines
             FROM {_ENG_TBL}
             WHERE Cycle = (SELECT MAX(Cycle) FROM {_ENG_TBL} e2 WHERE e2.id = {_ENG_TBL}.id)
@@ -132,12 +133,13 @@ def get_summary_kpis() -> dict:
         if len(eng) > 0:
             kpis.update({
                 "avg_rul":        int(eng["avg_rul"].iloc[0] or 0),
+                "failure_imminent_engines": int(eng["failure_imminent_engines"].iloc[0] or 0),
                 "critical_engines": int(eng["critical_engines"].iloc[0] or 0),
                 "total_engines":  int(eng["total_engines"].iloc[0] or 0),
             })
     except Exception as exc:
         logger.warning("Engine KPI query failed: %s", exc)
-        kpis.update({"avg_rul": 0, "critical_engines": 0, "total_engines": 0})
+        kpis.update({"avg_rul": 0, "failure_imminent_engines": 0, "critical_engines": 0, "total_engines": 0})
 
     try:
         elec = _sql_query(f"""
@@ -235,7 +237,14 @@ def get_cnc_anomalies(limit: int = 50) -> pd.DataFrame:
 
 # ── Engine / NASA RUL functions ────────────────────────────────────────────────
 def get_engine_rul_buckets() -> pd.DataFrame:
-    """Return engine counts bucketed by health status (latest cycle per engine)."""
+    """Return engine counts bucketed by health status (latest cycle per engine).
+    
+    Status thresholds (industry standard):
+    - Failure imminent: < 20 cycles
+    - Critical: 20-49 cycles
+    - Warning: 50-125 cycles
+    - Safe: > 125 cycles
+    """
     df = _sql_query(f"""
         SELECT
             id AS engine_id,
@@ -246,8 +255,8 @@ def get_engine_rul_buckets() -> pd.DataFrame:
     """)
     df["bucket"] = pd.cut(
         df["final_rul"],
-        bins=[-1, 49, 99, float("inf")],
-        labels=["Critical (<50)", "Warning (50-99)", "Healthy (≥100)"],
+        bins=[-1, 19, 49, 125, float("inf")],
+        labels=["Failure imminent (<20)", "Critical (20-49)", "Warning (50-125)", "Safe (>125)"],
     )
     return df.groupby("bucket", observed=True).size().reset_index(name="count")
 
@@ -282,7 +291,14 @@ def get_engine_rul_trend(engine_ids: list | None = None, limit_engines: int = 10
 
 
 def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
-    """Return one row per engine showing latest cycle stats — for the summary table."""
+    """Return one row per engine showing latest cycle stats — for the summary table.
+    
+    Status thresholds (industry standard):
+    - Failure imminent: < 20 cycles (take offline)
+    - Critical: 20-49 cycles (immediate action)
+    - Warning: 50-125 cycles (monitor closely)
+    - Safe: > 125 cycles (normal operation)
+    """
     return _sql_query(f"""
         SELECT
             id AS engine_id,
@@ -291,9 +307,10 @@ def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
             ROUND(AVG(SensorMeasure2), 2) AS avg_temp,
             ROUND(AVG(SensorMeasure3), 2) AS avg_pressure,
             CASE
+                WHEN MIN(RemainingUsefulLife) < 20  THEN 'Failure imminent'
                 WHEN MIN(RemainingUsefulLife) < 50  THEN 'Critical'
-                WHEN MIN(RemainingUsefulLife) < 100 THEN 'Warning'
-                ELSE 'Healthy'
+                WHEN MIN(RemainingUsefulLife) < 126 THEN 'Warning'
+                ELSE 'Safe'
             END AS status
         FROM {_ENG_TBL}
         GROUP BY id

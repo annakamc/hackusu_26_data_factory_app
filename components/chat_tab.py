@@ -200,7 +200,8 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
         """Log FEEDBACK to audit trail when user likes/dislikes an assistant message."""
         try:
             idx = like_data.index
-            if isinstance(idx, tuple):
+            # Handle different index types: tuple, list, int, or None
+            if isinstance(idx, (tuple, list)):
                 idx = idx[0] if idx else 0
             else:
                 idx = int(idx) if idx is not None else 0
@@ -215,6 +216,7 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
                 liked = liked.strip().lower() in ("true", "like", "1", "yes")
             else:
                 liked = bool(liked)
+            
             user = auth_service.get_user_from_request(request)
             email = user["email"] if user else "unknown"
             role = user["role"] if user else "viewer"
@@ -227,7 +229,7 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
                 liked=liked,
             )
         except Exception as exc:
-            logger.warning("Feedback logging failed: %s", exc)
+            logger.warning("Feedback logging failed: %s", exc, exc_info=True)
 
     chatbot.like(
         on_feedback,
