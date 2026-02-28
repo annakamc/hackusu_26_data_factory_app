@@ -123,12 +123,11 @@ def get_summary_kpis() -> dict:
     try:
         eng = _sql_query(f"""
             SELECT
-                ROUND(AVG(CAST(RemainingUsefulLife AS FLOAT)), 0) AS avg_rul,
-                SUM(CASE WHEN RemainingUsefulLife < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
-                SUM(CASE WHEN RemainingUsefulLife >= 20 AND RemainingUsefulLife < 50 THEN 1 ELSE 0 END) AS critical_engines,
-                COUNT(DISTINCT id) AS total_engines
-            FROM {_ENG_TBL}
-            WHERE Cycle = (SELECT MAX(Cycle) FROM {_ENG_TBL} e2 WHERE e2.id = {_ENG_TBL}.id)
+                ROUND(AVG(CAST(predicted_rul AS FLOAT)), 0) AS avg_rul,
+                SUM(CASE WHEN predicted_rul < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
+                SUM(CASE WHEN predicted_rul >= 20 AND predicted_rul < 50 THEN 1 ELSE 0 END) AS critical_engines,
+                COUNT(DISTINCT unit_nr) AS total_engines
+            FROM predictive_maintenance.nasa_engine_rul
         """)
         if len(eng) > 0:
             kpis.update({
@@ -237,7 +236,7 @@ def get_cnc_anomalies(limit: int = 50) -> pd.DataFrame:
 
 # ── Engine / NASA RUL functions ────────────────────────────────────────────────
 def get_engine_rul_buckets() -> pd.DataFrame:
-    """Return engine counts bucketed by health status (latest cycle per engine).
+    """Return engine counts bucketed by health status using predicted RUL per engine.
     
     Status thresholds (industry standard):
     - Failure imminent: < 20 cycles
@@ -247,18 +246,17 @@ def get_engine_rul_buckets() -> pd.DataFrame:
     """
     df = _sql_query(f"""
         SELECT
-            id AS engine_id,
-            MAX(Cycle) AS max_cycle,
-            MIN(RemainingUsefulLife) AS final_rul
-        FROM {_ENG_TBL}
-        GROUP BY id
+            unit_nr AS engine_id,
+            predicted_rul,
+            CASE
+                WHEN predicted_rul < 20  THEN 'Failure imminent (<20)'
+                WHEN predicted_rul < 50  THEN 'Critical (20-49)'
+                WHEN predicted_rul < 125 THEN 'Warning (50-125)'
+                ELSE 'Safe (>125)'
+            END AS bucket
+        FROM predictive_maintenance.nasa_engine_rul
     """)
-    df["bucket"] = pd.cut(
-        df["final_rul"],
-        bins=[-1, 19, 49, 125, float("inf")],
-        labels=["Failure imminent (<20)", "Critical (20-49)", "Warning (50-125)", "Safe (>125)"],
-    )
-    return df.groupby("bucket", observed=True).size().reset_index(name="count")
+    return df.groupby("bucket", observed=False).size().reset_index(name="count")
 
 
 def get_engine_rul_trend(engine_ids: list | None = None, limit_engines: int = 10) -> pd.DataFrame:
@@ -291,7 +289,7 @@ def get_engine_rul_trend(engine_ids: list | None = None, limit_engines: int = 10
 
 
 def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
-    """Return one row per engine showing latest cycle stats — for the summary table.
+    """Return one row per engine showing latest status from predicted RUL.
     
     Status thresholds (industry standard):
     - Failure imminent: < 20 cycles (take offline)
@@ -301,20 +299,16 @@ def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
     """
     return _sql_query(f"""
         SELECT
-            id AS engine_id,
-            MAX(Cycle) AS total_cycles,
-            MIN(RemainingUsefulLife) AS remaining_rul,
-            ROUND(AVG(SensorMeasure2), 2) AS avg_temp,
-            ROUND(AVG(SensorMeasure3), 2) AS avg_pressure,
+            unit_nr AS engine_id,
+            predicted_rul AS remaining_rul,
             CASE
-                WHEN MIN(RemainingUsefulLife) < 20  THEN 'Failure imminent'
-                WHEN MIN(RemainingUsefulLife) < 50  THEN 'Critical'
-                WHEN MIN(RemainingUsefulLife) < 126 THEN 'Warning'
+                WHEN predicted_rul < 20  THEN 'Failure imminent'
+                WHEN predicted_rul < 50  THEN 'Critical'
+                WHEN predicted_rul < 125 THEN 'Warning'
                 ELSE 'Safe'
             END AS status
-        FROM {_ENG_TBL}
-        GROUP BY id
-        ORDER BY remaining_rul ASC
+        FROM predictive_maintenance.nasa_engine_rul
+        ORDER BY predicted_rul ASC
         LIMIT {limit}
     """)
 
