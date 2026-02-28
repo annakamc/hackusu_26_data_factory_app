@@ -92,13 +92,33 @@ def _build_health_bar(health_df_sorted: pd.DataFrame, show_threshold: bool) -> g
             annotation_font=dict(color="#000000"),
         )
 
+    # Invisible scatter traces just for the legend
+    for color, label in [
+        ("#43A047", "Good (≥ 98%)"),
+        ("#FB8C00", "Warning (95–98%)"),
+        ("#E53935", "Critical (< 95%)"),
+    ]:
+        fig.add_trace(go.Scatter(
+            x=[None], y=[None],
+            mode="markers",
+            marker=dict(size=10, color=color, symbol="square"),
+            name=label,
+            showlegend=True,
+        ))
+
     fig.update_layout(
         title="Heater Health Score (Recent vs Baseline Voltage)",
         xaxis_title="",
         yaxis_title="Health Score (%)",
         yaxis=dict(range=[85, 102], gridcolor="rgba(148,163,184,0.1)"),
-        showlegend=False,
-        margin=dict(l=50, r=20, t=50, b=40),
+        showlegend=True,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom", y=1.02,
+            xanchor="right", x=1,
+            font=dict(size=11),
+        ),
+        margin=dict(l=50, r=20, t=70, b=40),
         bargap=0.4,
     )
     return fig
