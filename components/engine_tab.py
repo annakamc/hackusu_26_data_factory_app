@@ -11,7 +11,12 @@ from services import db_service, auth_service, audit_service
 
 logger = logging.getLogger(__name__)
 
-_STATUS_COLOR = {"Critical": "#E53935", "Warning": "#FB8C00", "Healthy": "#43A047"}
+_STATUS_COLOR = {
+    "Failure": "#B71C1C",   # RUL < 20
+    "Critical": "#E53935",  # 20-49
+    "Warning": "#FB8C00",   # 50-125
+    "Safe": "#43A047",      # >125
+}
 
 VARYING_SENSORS = [
     "SensorMeasure2", "SensorMeasure3", "SensorMeasure4", "SensorMeasure7",
@@ -177,7 +182,13 @@ def build() -> None:
 
             # ── Chart 2: Sensor Comparison Scatter ───────────────────────────
             bucket_df = db_service.get_engine_rul_buckets()
-            bucket_order = ["Critical (<50)", "Warning (50-99)", "Healthy (≥100)"]
+            # use the same buckets produced by the SQL query in db_service
+            bucket_order = [
+                "Failure imminent (<20)",
+                "Critical (20-49)",
+                "Warning (50-125)",
+                "Safe (>125)",
+            ]
             bucket_df["bucket"] = pd.Categorical(
                 bucket_df["bucket"], categories=bucket_order, ordered=True
             )
@@ -280,9 +291,16 @@ def build() -> None:
 
             # ── Engine table & KPIs (unchanged) ──────────────────────────────────
             eng_df   = db_service.get_engine_latest_status(limit=200)
-            critical = int(bucket_df[bucket_df["bucket"] == "Critical (<50)"]["count"].sum())
-            warning  = int(bucket_df[bucket_df["bucket"] == "Warning (50-99)"]["count"].sum())
-            healthy  = int(bucket_df[bucket_df["bucket"] == "Healthy (≥100)"]["count"].sum())
+            # derive engine counts from the labeled buckets (failure+critical combined)
+            critical = int(
+                bucket_df[bucket_df["bucket"].str.contains("Critical|Failure", na=False)]["count"].sum()
+            )
+            warning = int(
+                bucket_df[bucket_df["bucket"].str.contains("Warning", na=False)]["count"].sum()
+            )
+            healthy = int(
+                bucket_df[bucket_df["bucket"].str.contains("Safe", na=False)]["count"].sum()
+            )
             avg_rul  = int(eng_df["remaining_rul"].mean()) if len(eng_df) > 0 else 0
 
             audit_service.log_event(
