@@ -15,6 +15,7 @@ _PAGES = [
     {"page": "Overview",            "category": "main",  "enabled": True},
     {"page": "CNC Analysis",        "category": "main",  "enabled": True},
     {"page": "Engine Health",       "category": "main",  "enabled": True},
+    {"page": "Heater Health",       "category": "main",  "enabled": True},    
     {"page": "Electrical Monitor",  "category": "main",  "enabled": True},
     {"page": "Chat (panel)",        "category": "main",  "enabled": True},
     {"page": "Audit Log",           "category": "main",  "enabled": True},

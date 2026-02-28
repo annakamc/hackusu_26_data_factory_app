@@ -22,8 +22,8 @@ _DB_PATH = Path(__file__).parent.parent / "database" / "warehouse.db"
 # Local dev only: set DATABRICKS_INSECURE_TLS=true to skip SSL verify (e.g. behind VPN/proxy)
 _INSECURE_TLS = (os.getenv("DATABRICKS_INSECURE_TLS", "") or "").strip().lower().split("#")[0].strip() == "true"
 
-_CATALOG = os.getenv("DATABRICKS_CATALOG", "main")
-_SCHEMA  = os.getenv("DATABRICKS_SCHEMA", "predictive_maintenance")
+_CATALOG = os.getenv("DATABRICKS_CATALOG", "dataknobs_predictive_maintenance_and_asset_management")
+_SCHEMA  = os.getenv("DATABRICKS_SCHEMA", "datasets")
 
 # Table references — names match Dataknobs Marketplace dataset (installed via Unity Catalog)
 # If your catalog/schema differ, update DATABRICKS_CATALOG and DATABRICKS_SCHEMA in app.yaml
@@ -128,7 +128,6 @@ def get_summary_kpis() -> dict:
                 SUM(CASE WHEN RemainingUsefulLife >= 20 AND RemainingUsefulLife < 50 THEN 1 ELSE 0 END) AS critical_engines,
                 COUNT(DISTINCT id) AS total_engines
             FROM {_ENG_TBL}
-            WHERE Cycle = (SELECT MAX(Cycle) FROM {_ENG_TBL} e2 WHERE e2.id = {_ENG_TBL}.id)
         """)
         if len(eng) > 0:
             kpis.update({
@@ -237,7 +236,7 @@ def get_cnc_anomalies(limit: int = 50) -> pd.DataFrame:
 
 # ── Engine / NASA RUL functions ────────────────────────────────────────────────
 def get_engine_rul_buckets() -> pd.DataFrame:
-    """Return engine counts bucketed by health status (latest cycle per engine).
+    """Return engine counts bucketed by health status using predicted RUL per engine.
     
     Status thresholds (industry standard):
     - Failure imminent: < 20 cycles
@@ -248,17 +247,17 @@ def get_engine_rul_buckets() -> pd.DataFrame:
     df = _sql_query(f"""
         SELECT
             id AS engine_id,
-            MAX(Cycle) AS max_cycle,
-            MIN(RemainingUsefulLife) AS final_rul
+            RemainingUsefulLife AS predicted_rul,
+            CASE
+                WHEN RemainingUsefulLife < 20  THEN 'Failure imminent (<20)'
+                WHEN RemainingUsefulLife < 50  THEN 'Critical (20-49)'
+                WHEN RemainingUsefulLife < 125 THEN 'Warning (50-125)'
+                ELSE 'Safe (>125)'
+            END AS bucket
         FROM {_ENG_TBL}
-        GROUP BY id
     """)
-    df["bucket"] = pd.cut(
-        df["final_rul"],
-        bins=[-1, 19, 49, 125, float("inf")],
-        labels=["Failure imminent (<20)", "Critical (20-49)", "Warning (50-125)", "Safe (>125)"],
-    )
-    return df.groupby("bucket", observed=True).size().reset_index(name="count")
+    df["bucket"] = df["bucket"].astype(str)  # Ensure bucket is string type
+    return df.groupby("bucket", observed=False).size().reset_index(name="count")
 
 
 def get_engine_rul_trend(engine_ids: list | None = None, limit_engines: int = 10) -> pd.DataFrame:
@@ -291,7 +290,7 @@ def get_engine_rul_trend(engine_ids: list | None = None, limit_engines: int = 10
 
 
 def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
-    """Return one row per engine showing latest cycle stats — for the summary table.
+    """Return one row per engine showing latest status from predicted RUL.
     
     Status thresholds (industry standard):
     - Failure imminent: < 20 cycles (take offline)
@@ -302,19 +301,15 @@ def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
     return _sql_query(f"""
         SELECT
             id AS engine_id,
-            MAX(Cycle) AS total_cycles,
-            MIN(RemainingUsefulLife) AS remaining_rul,
-            ROUND(AVG(SensorMeasure2), 2) AS avg_temp,
-            ROUND(AVG(SensorMeasure3), 2) AS avg_pressure,
+            RemainingUsefulLife AS remaining_rul,
             CASE
-                WHEN MIN(RemainingUsefulLife) < 20  THEN 'Failure imminent'
-                WHEN MIN(RemainingUsefulLife) < 50  THEN 'Critical'
-                WHEN MIN(RemainingUsefulLife) < 126 THEN 'Warning'
+                WHEN RemainingUsefulLife < 20  THEN 'Failure imminent'
+                WHEN RemainingUsefulLife < 50  THEN 'Critical'
+                WHEN RemainingUsefulLife < 125 THEN 'Warning'
                 ELSE 'Safe'
             END AS status
         FROM {_ENG_TBL}
-        GROUP BY id
-        ORDER BY remaining_rul ASC
+        ORDER BY RemainingUsefulLife ASC
         LIMIT {limit}
     """)
 

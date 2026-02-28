@@ -71,7 +71,7 @@ def build() -> None:
     gr.Markdown("## Engine Health & Remaining Useful Life")
     gr.Markdown(
         "NASA turbofan degradation dataset — track engine RUL across operating cycles.  \n"
-        "_Source: `main.predictive_maintenance.nasa_engine_rul`_"
+        "_Source: `dataknobs_predictive_maintenance_and_asset_management.datasets.nasa_data_train_test`_"
     )
 
     with gr.Row():
@@ -251,11 +251,12 @@ def build() -> None:
             # ── Chart 4: Engine Status Breakdown — cleaner vertical bar ─────────
             stat_fig = go.Figure()
             for _, row in bucket_df.iterrows():
-                status_key = row["bucket"].split()[0]
+                bucket_str = str(row["bucket"]).strip()  # Ensure it's a string
+                status_key = bucket_str.split()[0]
                 stat_fig.add_trace(go.Bar(
-                    x=[row["bucket"]],
+                    x=[bucket_str],
                     y=[row["count"]],
-                    name=row["bucket"],
+                    name=bucket_str,
                     marker=dict(
                         color=_STATUS_COLOR.get(status_key, "#94A3B8"),
                         line=dict(width=0),

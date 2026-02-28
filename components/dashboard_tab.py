@@ -25,7 +25,7 @@ def build(summary: dict) -> list:
     # ── KPI Row ────────────────────────────────────────────────────────────────
     gr.Markdown("## Asset Health Overview")
     gr.Markdown(
-        "_Source: `main.predictive_maintenance.*` · Unity Catalog · "
+        "_Source: `dataknobs_predictive_maintenance_and_asset_management.datasets.*` · Unity Catalog · "
         "Predictive Maintenance & Asset Management (Dataknobs)_"
     )
 
