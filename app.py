@@ -117,6 +117,9 @@ footer {visibility: hidden}
   color: white !important;
 }
 #chat-side-panel { max-width: 420px; }
+/* No gap between chat buttons and Answered by: Genie */
+#chat-buttons-row { margin-bottom: 0 !important; }
+#chat-source-label { margin-top: 0 !important; padding-top: 0 !important; }
 """
 
 with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:

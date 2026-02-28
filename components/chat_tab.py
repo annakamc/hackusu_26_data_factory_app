@@ -91,11 +91,10 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             label="Your question",
             max_lines=3,
         )
-        with gr.Row():
+        with gr.Row(elem_id="chat-buttons-row"):
             submit_btn = gr.Button("Ask", variant="primary")
             clear_btn = gr.Button("Clear Chat", variant="secondary")
-
-    source_label = gr.Markdown("")
+        source_label = gr.Markdown("", elem_id="chat-source-label")
 
     gr.Markdown("**Example questions:**")
     with gr.Row():
