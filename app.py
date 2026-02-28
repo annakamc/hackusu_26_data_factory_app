@@ -119,10 +119,18 @@ footer {visibility: hidden}
 #chat-side-panel { max-width: 420px; }
 /* No gap between chat buttons and Answered by: Genie */
 #chat-buttons-row { margin-bottom: 0 !important; }
-#chat-source-label { margin-top: 0 !important; padding-top: 0 !important; }
-/* No gap between chat panel and Example questions */
+#chat-source-label {
+  margin-top: 0 !important; padding-top: 0 !important;
+  margin-bottom: 0 !important; padding-bottom: 0 !important;
+}
+/* Example questions directly under buttons — minimal gap */
+#example-questions-heading {
+  margin-top: 0 !important; padding-top: 0.25rem !important;
+  margin-bottom: 0 !important; padding-bottom: 0 !important;
+}
+#example-questions-row { margin-top: 0 !important; padding-top: 0 !important; }
+/* Chat panel: no extra padding at bottom */
 #chat-panel-column { margin-bottom: 0 !important; padding-bottom: 0 !important; }
-#example-questions-section { margin-top: 0 !important; padding-top: 0 !important; }
 """
 
 with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:

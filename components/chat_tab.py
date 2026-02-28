@@ -95,10 +95,8 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             submit_btn = gr.Button("Ask", variant="primary")
             clear_btn = gr.Button("Clear Chat", variant="secondary")
         source_label = gr.Markdown("", elem_id="chat-source-label")
-
-    with gr.Column(elem_id="example-questions-section"):
-        gr.Markdown("**Example questions:**")
-        with gr.Row():
+        gr.Markdown("**Example questions:**", elem_id="example-questions-heading")
+        with gr.Row(elem_id="example-questions-row"):
             for q in _EXAMPLE_QUESTIONS[:3]:
                 gr.Button(q, size="sm").click(
                     fn=lambda question=q: question,
