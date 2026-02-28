@@ -44,12 +44,12 @@ from components import (
     dashboard_tab,
     cnc_tab,
     engine_tab,
+    heater_tab, 
     electrical_tab,
     chat_tab,
     audit_tab,
     admin_tab,
-    request_access_tab,
-    heater_tab,           # ← add this
+    request_access_tab
 )
 
 # Workaround: Gradio 4.44.x / gradio_client crash when API schema has a boolean
