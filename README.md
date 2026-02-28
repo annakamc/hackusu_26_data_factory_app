@@ -5,3 +5,4 @@
 - added Data Classification auto on
 - leveraged data lineage through built in features
 - column masking personal data (example technicians_name created SQL function to sha2(lower(trim(name)), 256))
+- included outside data 3x
