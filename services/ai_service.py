@@ -58,7 +58,18 @@ class ChatResponse:
     error: str | None = None                # set only when all tiers fail
 
 
-# ── PUBLIC ENTRY POINT ────────────────────────────────────────────────────────
+# Fast-path: short greetings get an instant reply (no Genie/Bedrock call)
+_GREETINGS = frozenset({
+    "hello", "hi", "hey", "hi there", "hey there", "howdy",
+    "thanks", "thank you", "ok", "okay", "yes", "no",
+    "good morning", "good afternoon", "good evening",
+})
+_GREETING_REPLY = (
+    "Hi! Ask me anything about your CNC machines, engines, or electrical data — "
+    "e.g. \"Which machine type has the highest failure rate?\" or \"How many power failures?\""
+)
+
+
 def chat_with_data(
     question: str,
     conversation_id: str | None = None,
@@ -70,6 +81,11 @@ def chat_with_data(
     """
     if USE_MOCK:
         return _mock_response(question)
+
+    # Fast path: greetings get an instant reply (no Genie/Bedrock call)
+    q = question.strip().lower()
+    if q in _GREETINGS:
+        return ChatResponse(text=_GREETING_REPLY, source="genie")
 
     # Tier 1: Genie
     if GENIE_SPACE_ID:
@@ -94,12 +110,24 @@ def chat_with_data(
 
 
 # ── Tier 1: Genie ─────────────────────────────────────────────────────────────
+def _genie_conv_and_message_ids(data: dict) -> tuple[str, str]:
+    """Extract conversation_id and message_id from start/continue response.
+    API may return top-level conversation_id/message_id or nested conversation.id / message.id.
+    """
+    cid = data.get("conversation_id") or (data.get("conversation") or {}).get("id")
+    mid = data.get("message_id") or (data.get("message") or {}).get("id")
+    if not cid or not mid:
+        raise ValueError(f"Genie response missing conversation/message ids: keys={list(data.keys())}")
+    return cid, mid
+
+
 def _start_genie(question: str) -> ChatResponse:
     url = f"{_GENIE_BASE}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation"
     resp = requests.post(url, headers=_genie_headers(), json={"content": question}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    return _poll_genie(data["conversation_id"], data["message_id"])
+    cid, mid = _genie_conv_and_message_ids(data)
+    return _poll_genie(cid, mid)
 
 
 def _continue_genie(conversation_id: str, question: str) -> ChatResponse:
@@ -108,34 +136,87 @@ def _continue_genie(conversation_id: str, question: str) -> ChatResponse:
     resp = requests.post(url, headers=_genie_headers(), json={"content": question}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    return _poll_genie(conversation_id, data["message_id"])
+    _, mid = _genie_conv_and_message_ids(data)
+    return _poll_genie(conversation_id, mid)
 
 
 def _poll_genie(conversation_id: str, message_id: str, max_wait: int = 60) -> ChatResponse:
     url = (f"{_GENIE_BASE}/api/2.0/genie/spaces/{GENIE_SPACE_ID}"
            f"/conversations/{conversation_id}/messages/{message_id}")
-    wait, elapsed = 1, 0
+    # Poll more frequently at first (0.3s, 0.5s, 1s, 2s, 3s...) so we notice completion sooner
+    wait, elapsed = 0.3, 0.0
     while elapsed < max_wait:
         data = requests.get(url, headers=_genie_headers(), timeout=10).json()
         status = data.get("status")
         if status == "COMPLETED":
             text, sql = "", None
-            for att in data.get("attachments", []):
-                if att.get("type") == "text":
-                    text = att.get("content", "")
-                elif att.get("type") == "query":
-                    sql = att.get("query", {}).get("query")
+            attachments = data.get("attachments") or []
+            if not attachments:
+                logger.info("Genie COMPLETED but attachments empty; response keys: %s", list(data.keys()))
+            def _norm_text(raw) -> str:
+                """Genie may return content as str, list of segments, or dict; always return str."""
+                if raw is None:
+                    return ""
+                if isinstance(raw, str):
+                    return raw
+                if isinstance(raw, list):
+                    return "".join(str(x) for x in raw)
+                if isinstance(raw, dict):
+                    return _norm_text(raw.get("content") or raw.get("text"))
+                return str(raw)
+
+            for att in attachments:
+                att_type = att.get("type")
+                # Type-based: text attachment
+                if att_type == "text":
+                    text = text or _norm_text(att.get("content")) or _norm_text(att.get("text"))
+                # Type-based: query attachment (SQL may be in .query string or .query.query)
+                elif att_type == "query":
+                    q = att.get("query")
+                    sql = sql or (q.get("query", "") if isinstance(q, dict) else (q or ""))
+                # Single attachment with both text and query (doc: "text, query, attachment_id")
+                if not text and att.get("text"):
+                    text = _norm_text(att.get("text"))
+                if not text and att.get("content"):
+                    text = _norm_text(att.get("content"))
+                q = att.get("query")
+                if not sql and q:
+                    sql = q.get("query", "") if isinstance(q, dict) else (q if isinstance(q, str) else None)
+            if attachments and (not text and not sql):
+                logger.debug("Genie attachments structure (keys only): %s", [list(a.keys()) for a in attachments])
+            # Normalize SQL: may be str, dict with "query", or list of lines
+            def _norm_sql(s):
+                if s is None:
+                    return None
+                if isinstance(s, str):
+                    return s.strip() or None
+                if isinstance(s, dict):
+                    return _norm_sql(s.get("query"))
+                if isinstance(s, list):
+                    return _norm_sql("".join(str(x) for x in s))
+                return None
+            sql_str = _norm_sql(sql)
             df = None
-            if sql:
+            if sql_str:
                 try:
-                    from services import db_service
-                    df = db_service._sql_query(validate_sql(sql))
+                    if sql_str.strip():
+                        from services import db_service
+                        df = db_service._sql_query(validate_sql(sql_str))
                 except Exception as exc:
                     logger.warning("Could not execute Genie SQL for DataFrame: %s", exc)
+            # Prefer meaningful message over generic placeholder
+            if not text and df is not None and len(df) > 0:
+                text = f"Found {len(df):,} row(s)."
+            elif not text:
+                text = (
+                    "Here are your results."
+                    if (df is not None and len(df) > 0) else
+                    "Genie responded but no explanation or data was returned. Try rephrasing or check your Genie space has the right tables and examples."
+                )
             return ChatResponse(
-                text=text or "Here are your results.",
+                text=text,
                 dataframe=df,
-                sql=sql,
+                sql=sql_str,
                 conversation_id=conversation_id,
                 source="genie",
             )
@@ -145,7 +226,7 @@ def _poll_genie(conversation_id: str, message_id: str, max_wait: int = 60) -> Ch
             raise RuntimeError("Genie could not answer this question.")
         time.sleep(wait)
         elapsed += wait
-        wait = min(wait * 2, 5)
+        wait = min(wait * 2, 3)  # cap at 3s between polls for faster pickup
     raise TimeoutError("Genie timed out.")
 
 

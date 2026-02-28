@@ -1,4 +1,5 @@
 """Ask Your Data tab — Genie → Bedrock conversational interface."""
+import re
 import logging
 
 import gradio as gr
@@ -8,51 +9,93 @@ from services import ai_service, auth_service, audit_service
 
 logger = logging.getLogger(__name__)
 
+# Decimal places for numeric display in chat (query results + numbers in text)
+_DECIMAL_PLACES = 4
+
+# Max rows to show as markdown table inline in the chat
+_IN_CHAT_TABLE_MAX_ROWS = 25
+
+
+def _round_df_decimals(df: pd.DataFrame, decimals: int = _DECIMAL_PLACES) -> pd.DataFrame:
+    """Round float columns to the given number of decimal places; leave other dtypes unchanged."""
+    if df is None or len(df) == 0:
+        return df
+    out = df.copy()
+    for col in out.columns:
+        if pd.api.types.is_float_dtype(out[col]):
+            out[col] = out[col].round(decimals)
+    return out
+
+
+def _round_numbers_in_text(text: str, decimals: int = _DECIMAL_PLACES) -> str:
+    """Round numbers with more than `decimals` decimal places (e.g. 0.03921234 → 0.0392)."""
+    if not text or decimals < 0:
+        return text
+
+    def repl(m):
+        try:
+            return str(round(float(m.group(1)), decimals))
+        except ValueError:
+            return m.group(0)
+
+    # Match numbers that have a decimal point and at least (decimals+1) decimal places
+    pattern = r"(\d+\.\d{" + str(decimals + 1) + r",})"
+    return re.sub(pattern, repl, text)
+
+
+def _df_to_markdown_table(df: pd.DataFrame, max_rows: int = _IN_CHAT_TABLE_MAX_ROWS) -> str:
+    """Convert DataFrame to a markdown table string; limit rows for in-chat display."""
+    if df is None or len(df) == 0:
+        return ""
+    head = df.head(max_rows)
+    cols = list(head.columns)
+    sep = " | "
+    header = "| " + sep.join(str(c).replace("|", "\\|") for c in cols) + " |"
+    divider = "| " + sep.join("---" for _ in cols) + " |"
+    rows = []
+    for _, row in head.iterrows():
+        cells = [str(row[c]).replace("|", "\\|") for c in cols]
+        rows.append("| " + sep.join(cells) + " |")
+    table = "\n".join([header, divider] + rows)
+    if len(df) > max_rows:
+        table += f"\n_… and {len(df) - max_rows} more row(s)._"
+    return table
+
+
 _EXAMPLE_QUESTIONS = [
     "Which machine type has the highest failure rate?",
-    "Show engines with RUL under 50 cycles",
+    "Show me the top 10 CNC machines by tool wear and whether they failed.",
     "What is the average torque when a machine failure occurs?",
-    "How many power failures happened across all CNC machines?",
-    "Which sensor readings are highest before engine failure?",
-]
+    "How many power failures happened across all CNC machines?"
+    ]
 
 
 def build(conv_id_state: gr.State, schema_context: str = "") -> None:
     """Build the Ask Your Data tab inside a gr.Blocks context."""
 
     gr.Markdown("## Ask Your Data")
-    gr.Markdown(
-        "Ask questions in plain English about any asset — CNC machines, engines, or "
-        "electrical systems. Powered by **Genie** (primary) with **Bedrock fallback**.  \n"
-        "_Responses are shown as tables and explanations — no raw code is returned._"
-    )
+    gr.Markdown("Ask in plain English; get answers and tables — no code.")
+    gr.Markdown("_Data questions may take 5–15 seconds while we query your data._")
 
-    chatbot = gr.Chatbot(
-        label="",
-        height=400,
-        type="messages",
-        render_markdown=True,
-        show_label=False,
-    )
-
-    results_table = gr.DataFrame(
-        label="Query Results",
-        height=280,
-        visible=False,
-    )
-
-    with gr.Row():
+    # Conversation window: chat + input and buttons at the bottom
+    with gr.Column(variant="panel"):
+        chatbot = gr.Chatbot(
+            label="",
+            height=400,
+            type="messages",
+            render_markdown=True,
+            show_label=False,
+        )
         msg_box = gr.Textbox(
             placeholder="e.g. Which CNC machines have the most tool wear failures?",
             label="Your question",
             max_lines=3,
-            scale=4,
         )
-        submit_btn = gr.Button("Ask", variant="primary", scale=1)
+        with gr.Row():
+            submit_btn = gr.Button("Ask", variant="primary")
+            clear_btn = gr.Button("Clear Chat", variant="secondary")
 
-    with gr.Row():
-        clear_btn    = gr.Button("Clear Chat", variant="secondary")
-        source_label = gr.Markdown("")
+    source_label = gr.Markdown("")
 
     gr.Markdown("**Example questions:**")
     with gr.Row():
@@ -67,7 +110,7 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
                 request: gr.Request) -> tuple:
         message = message.strip()
         if not message or len(message) > 2000:
-            return history, message, conv_id, "", gr.update(visible=False)
+            return history, message, conv_id, ""
 
         user  = auth_service.get_user_from_request(request)
         email = user["email"] if user else "unknown"
@@ -79,10 +122,23 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             schema_context=schema_context,
         )
 
-        # Explanation text only — no SQL/code in chat window
-        reply = result.text if not result.error else (
+        # Explanation text only — no SQL/code in chat window. Ensure string for Gradio Chatbot.
+        raw_reply = result.text if not result.error else (
             "Sorry, I could not answer that question. Please try rephrasing it."
         )
+        if isinstance(raw_reply, dict):
+            reply = raw_reply.get("content", raw_reply.get("text", str(raw_reply)))
+        elif isinstance(raw_reply, list):
+            reply = "\n".join(str(x) for x in raw_reply) if raw_reply else ""
+        else:
+            reply = str(raw_reply) if raw_reply is not None else ""
+        reply = reply.strip() or "No response."
+        reply = _round_numbers_in_text(reply, _DECIMAL_PLACES)
+
+        # Round query results to 4 decimal places for display
+        display_df = None
+        if result.dataframe is not None and len(result.dataframe) > 0:
+            display_df = _round_df_decimals(result.dataframe, _DECIMAL_PLACES)
 
         audit_service.log_event(
             action_type="CHAT",
@@ -93,31 +149,33 @@ def build(conv_id_state: gr.State, schema_context: str = "") -> None:
             row_count=len(result.dataframe) if result.dataframe is not None else 0,
         )
 
+        # Build assistant message: text + optional inline table (query results under the text)
+        assistant_content = reply
+        if display_df is not None and len(display_df) > 0:
+            table_md = _df_to_markdown_table(display_df, _IN_CHAT_TABLE_MAX_ROWS)
+            if table_md:
+                assistant_content = reply + "\n\n" + table_md
+
         new_history = history + [
             {"role": "user",      "content": message},
-            {"role": "assistant", "content": reply},
+            {"role": "assistant", "content": assistant_content},
         ]
 
         source_md = f"_Answered by: **{result.source.capitalize()}**_"
 
-        if result.dataframe is not None and len(result.dataframe) > 0:
-            table_update = gr.update(value=result.dataframe, visible=True)
-        else:
-            table_update = gr.update(value=None, visible=False)
-
-        return new_history, "", result.conversation_id, source_md, table_update
+        return new_history, "", result.conversation_id, source_md
 
     submit_btn.click(
         fn=respond,
         inputs=[msg_box, chatbot, conv_id_state],
-        outputs=[chatbot, msg_box, conv_id_state, source_label, results_table],
+        outputs=[chatbot, msg_box, conv_id_state, source_label],
     )
     msg_box.submit(
         fn=respond,
         inputs=[msg_box, chatbot, conv_id_state],
-        outputs=[chatbot, msg_box, conv_id_state, source_label, results_table],
+        outputs=[chatbot, msg_box, conv_id_state, source_label],
     )
     clear_btn.click(
-        fn=lambda: ([], "", None, "", gr.update(value=None, visible=False)),
-        outputs=[chatbot, msg_box, conv_id_state, source_label, results_table],
+        fn=lambda: ([], "", None, ""),
+        outputs=[chatbot, msg_box, conv_id_state, source_label],
     )
