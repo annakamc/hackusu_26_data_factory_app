@@ -136,25 +136,21 @@ def build(summary: dict) -> list:
                         "failure_label": "Status"},
             )
 
-            # --- Type comparison bar ---
+            # --- Tool Wear vs Failure Rate by Machine Type (scatter, single axes) ---
             typ_df  = db_service.get_cnc_failure_by_type()
-            typ_fig = go.Figure()
-            typ_fig.add_trace(go.Bar(
-                name="Avg Tool Wear (min)", x=typ_df["machine_type"],
-                y=typ_df["avg_tool_wear_min"], marker_color="#1976D2",
-            ))
-            typ_fig.add_trace(go.Bar(
-                name="Failure Rate (%)", x=typ_df["machine_type"],
-                y=typ_df["failure_rate_pct"], marker_color="#E53935",
-                yaxis="y2",
-            ))
-            typ_fig.update_layout(
-                title="Tool Wear & Failure Rate by Machine Type",
-                yaxis=dict(title="Avg Tool Wear (min)"),
-                yaxis2=dict(title="Failure Rate (%)", overlaying="y", side="right"),
-                barmode="group",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02),
+            typ_fig = px.scatter(
+                typ_df, x="avg_tool_wear_min", y="failure_rate_pct",
+                color="machine_type",
+                text="machine_type",
+                title="Tool Wear and Failure Rate by Machine Type",
+                labels={
+                    "avg_tool_wear_min": "Avg Tool Wear (min)",
+                    "failure_rate_pct": "Failure Rate (%)",
+                    "machine_type": "Machine Type",
+                },
             )
+            typ_fig.update_traces(textposition="top center")
+            typ_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
             # --- Anomaly table ---
             anom_df = db_service.get_cnc_anomalies(limit=30)
