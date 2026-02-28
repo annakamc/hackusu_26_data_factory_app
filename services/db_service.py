@@ -309,7 +309,6 @@ def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
                 ELSE 'Safe'
             END AS status
         FROM {_ENG_TBL}
-        ORDER BY RemainingUsefulLife ASC
         LIMIT {limit}
     """)
 
