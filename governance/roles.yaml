@@ -20,7 +20,7 @@ roles:
     row_limit: 500
 
   analyst:
-    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data", "Audit Log"]
+    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data"]
     can_export: true
     can_see_pii: false
     row_limit: 5000

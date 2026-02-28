@@ -15,7 +15,7 @@ def build() -> None:
     gr.Markdown("## Audit Log")
     gr.Markdown(
         "Governance trail of all queries, chat interactions, and access events.  \n"
-        "_Accessible to **analyst** and **admin** roles only._"
+        "_Accessible to **admin** role only._"
     )
 
     with gr.Row():
@@ -36,7 +36,7 @@ def build() -> None:
 
     def load_log(action_type_filter: str, request: gr.Request):
         user = auth_service.get_user_from_request(request)
-        if not user or user["role"] not in ("analyst", "admin"):
+        if not user or user["role"] != "admin":
             audit_service.log_event(
                 action_type="ACCESS_DENIED",
                 user_email=user["email"] if user else "unknown",
@@ -70,7 +70,7 @@ def build() -> None:
 
     def export_log(request: gr.Request):
         user = auth_service.get_user_from_request(request)
-        if not user or user["role"] not in ("analyst", "admin"):
+        if not user or user["role"] != "admin":
             return gr.update(visible=False), "⚠️ Export requires analyst or admin role."
 
         import tempfile, os
