@@ -256,6 +256,7 @@ def get_engine_rul_buckets() -> pd.DataFrame:
             END AS bucket
         FROM {_ENG_TBL}
     """)
+    df["bucket"] = df["bucket"].astype(str)  # Ensure bucket is string type
     return df.groupby("bucket", observed=False).size().reset_index(name="count")
 
 

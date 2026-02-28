@@ -251,11 +251,12 @@ def build() -> None:
             # ── Chart 4: Engine Status Breakdown — cleaner vertical bar ─────────
             stat_fig = go.Figure()
             for _, row in bucket_df.iterrows():
-                status_key = row["bucket"].split()[0]
+                bucket_str = str(row["bucket"]).strip()  # Ensure it's a string
+                status_key = bucket_str.split()[0]
                 stat_fig.add_trace(go.Bar(
-                    x=[row["bucket"]],
+                    x=[bucket_str],
                     y=[row["count"]],
-                    name=row["bucket"],
+                    name=bucket_str,
                     marker=dict(
                         color=_STATUS_COLOR.get(status_key, "#94A3B8"),
                         line=dict(width=0),
