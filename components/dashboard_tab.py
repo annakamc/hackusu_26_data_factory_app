@@ -51,7 +51,7 @@ def build(summary: dict) -> list:
         with gr.Column(scale=1, min_width=150):
             gr.Markdown("### Critical Engines")
             crit_kpi = gr.Markdown(
-                f"# **{summary.get('critical_engines', '--')}**",
+                f"# **{summary.get('critical_engines', '--'):,}**",
                 elem_id="kpi-crit",
             )
         with gr.Column(scale=1, min_width=150):
