@@ -67,6 +67,13 @@ def _genie_headers() -> dict:
         # #region agent log
         config_has_token = False
         try:
+            # In Databricks runtime (notebooks, jobs, apps) dbutils may be available
+            dbutils = __import__("dbutils")
+            token = dbutils.secrets.get(scope="hackusu", key="genietoken")
+        except (NameError, AttributeError, Exception):
+            pass
+    if not token:
+        try:
             from databricks.sdk.core import Config
             token = Config().token or ""
             config_has_token = bool(token)
