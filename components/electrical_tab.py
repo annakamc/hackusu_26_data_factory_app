@@ -57,13 +57,24 @@ def build() -> None:
         role  = user["role"]  if user else "viewer"
 
         try:
-            # Fault type pie
+            # ── Chart 1: Fault Type — horizontal bar (replaces pie) ───────────
             fault_df  = db_service.get_electrical_fault_summary()
-            fault_fig = px.pie(
-                fault_df, names="fault_type", values="count",
+            fault_df  = fault_df.sort_values("count", ascending=True)
+            fault_fig = px.bar(
+                fault_df, x="count", y="fault_type",
+                orientation="h",
                 title="Fault Type Distribution",
-                color_discrete_sequence=px.colors.qualitative.Set2,
-                hole=0.35,
+                labels={"count": "Number of Events", "fault_type": ""},
+                color="count",
+                color_continuous_scale="Reds",
+                text="count",
+            )
+            fault_fig.update_traces(textposition="outside")
+            fault_fig.update_layout(
+                coloraxis_showscale=False,
+                margin=dict(l=160, r=40, t=50, b=40),
+                xaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
+                yaxis=dict(tickfont=dict(size=11)),
             )
 
             # Phase scatter data
@@ -155,7 +166,6 @@ def build() -> None:
                     mode="lines", line=dict(color="#E53935"),
                     name="Neutral Current (INUT)",
                 ))
-                # Anomaly threshold (3-sigma)
                 mean_inut = trans_df["inut"].mean()
                 std_inut  = trans_df["inut"].std()
                 inut_fig.add_hline(y=mean_inut + 3 * std_inut,
