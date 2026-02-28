@@ -4,3 +4,4 @@
 - AD group created
 - added Data Classification auto on
 - leveraged data lineage through built in features
+- column masking personal data 
