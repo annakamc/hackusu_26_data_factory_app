@@ -1,18 +1,26 @@
-default_role: viewer
+default_role: no_access
 
-users: 
-  bracken576@outlook.com: analyst
+admin_email: annakamcclelland@gmail.com
+
+users:
   annakamcclelland@gmail.com: admin
+  deathrizzle4898@gmail.com: viewer
+  cadenjbaird@gmail.com: analyst
 
 roles:
+  no_access:
+    tabs: ["Request Access"]
+    can_export: false
+    can_see_pii: false
+
   viewer:
-    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor"]
+    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data"]
     can_export: false
     can_see_pii: false
     row_limit: 500
 
   analyst:
-    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Audit Log"]
+    tabs: ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor", "Ask Your Data", "Audit Log"]
     can_export: true
     can_see_pii: false
     row_limit: 5000

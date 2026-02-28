@@ -35,19 +35,19 @@ def resolve_role(email: str) -> str:
         with open(_ROLES_PATH) as f:
             config = yaml.safe_load(f)
         user_map = config.get("users", {})
-        return user_map.get(email, config.get("default_role", "viewer"))
+        return user_map.get(email, config.get("default_role", "no_access"))
     except Exception:
-        return "viewer"
+        return "no_access"
 
 
 def require_role(user: dict | None, min_role: str) -> bool:
     """
     Return True if user's role is >= min_role.
-    Hierarchy: admin > analyst > viewer
+    Hierarchy: admin > analyst > viewer > no_access
     """
-    hierarchy = {"viewer": 0, "analyst": 1, "admin": 2}
+    hierarchy = {"no_access": -1, "viewer": 0, "analyst": 1, "admin": 2}
     if user is None:
         return False
-    user_level = hierarchy.get(user.get("role", "viewer"), 0)
+    user_level = hierarchy.get(user.get("role", "no_access"), -1)
     required_level = hierarchy.get(min_role, 0)
     return user_level >= required_level
