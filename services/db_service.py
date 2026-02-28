@@ -22,8 +22,8 @@ _DB_PATH = Path(__file__).parent.parent / "database" / "warehouse.db"
 # Local dev only: set DATABRICKS_INSECURE_TLS=true to skip SSL verify (e.g. behind VPN/proxy)
 _INSECURE_TLS = (os.getenv("DATABRICKS_INSECURE_TLS", "") or "").strip().lower().split("#")[0].strip() == "true"
 
-_CATALOG = os.getenv("DATABRICKS_CATALOG", "main")
-_SCHEMA  = os.getenv("DATABRICKS_SCHEMA", "predictive_maintenance")
+_CATALOG = os.getenv("DATABRICKS_CATALOG", "dataknobs_predictive_maintenance_and_asset_management")
+_SCHEMA  = os.getenv("DATABRICKS_SCHEMA", "datasets")
 
 # Table references — names match Dataknobs Marketplace dataset (installed via Unity Catalog)
 # If your catalog/schema differ, update DATABRICKS_CATALOG and DATABRICKS_SCHEMA in app.yaml
@@ -123,11 +123,11 @@ def get_summary_kpis() -> dict:
     try:
         eng = _sql_query(f"""
             SELECT
-                ROUND(AVG(CAST(predicted_rul AS FLOAT)), 0) AS avg_rul,
-                SUM(CASE WHEN predicted_rul < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
-                SUM(CASE WHEN predicted_rul >= 20 AND predicted_rul < 50 THEN 1 ELSE 0 END) AS critical_engines,
-                COUNT(DISTINCT unit_nr) AS total_engines
-            FROM predictive_maintenance.nasa_engine_rul
+                ROUND(AVG(CAST(RemainingUsefulLife AS FLOAT)), 0) AS avg_rul,
+                SUM(CASE WHEN RemainingUsefulLife < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
+                SUM(CASE WHEN RemainingUsefulLife >= 20 AND RemainingUsefulLife < 50 THEN 1 ELSE 0 END) AS critical_engines,
+                COUNT(DISTINCT id) AS total_engines
+            FROM {_ENG_TBL}
         """)
         if len(eng) > 0:
             kpis.update({
@@ -246,15 +246,15 @@ def get_engine_rul_buckets() -> pd.DataFrame:
     """
     df = _sql_query(f"""
         SELECT
-            unit_nr AS engine_id,
-            predicted_rul,
+            id AS engine_id,
+            RemainingUsefulLife AS predicted_rul,
             CASE
-                WHEN predicted_rul < 20  THEN 'Failure imminent (<20)'
-                WHEN predicted_rul < 50  THEN 'Critical (20-49)'
-                WHEN predicted_rul < 125 THEN 'Warning (50-125)'
+                WHEN RemainingUsefulLife < 20  THEN 'Failure imminent (<20)'
+                WHEN RemainingUsefulLife < 50  THEN 'Critical (20-49)'
+                WHEN RemainingUsefulLife < 125 THEN 'Warning (50-125)'
                 ELSE 'Safe (>125)'
             END AS bucket
-        FROM predictive_maintenance.nasa_engine_rul
+        FROM {_ENG_TBL}
     """)
     return df.groupby("bucket", observed=False).size().reset_index(name="count")
 
@@ -299,16 +299,16 @@ def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
     """
     return _sql_query(f"""
         SELECT
-            unit_nr AS engine_id,
-            predicted_rul AS remaining_rul,
+            id AS engine_id,
+            RemainingUsefulLife AS remaining_rul,
             CASE
-                WHEN predicted_rul < 20  THEN 'Failure imminent'
-                WHEN predicted_rul < 50  THEN 'Critical'
-                WHEN predicted_rul < 125 THEN 'Warning'
+                WHEN RemainingUsefulLife < 20  THEN 'Failure imminent'
+                WHEN RemainingUsefulLife < 50  THEN 'Critical'
+                WHEN RemainingUsefulLife < 125 THEN 'Warning'
                 ELSE 'Safe'
             END AS status
-        FROM predictive_maintenance.nasa_engine_rul
-        ORDER BY predicted_rul ASC
+        FROM {_ENG_TBL}
+        ORDER BY RemainingUsefulLife ASC
         LIMIT {limit}
     """)
 

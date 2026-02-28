@@ -71,7 +71,7 @@ def build() -> None:
     gr.Markdown("## Engine Health & Remaining Useful Life")
     gr.Markdown(
         "NASA turbofan degradation dataset — track engine RUL across operating cycles.  \n"
-        "_Source: `main.predictive_maintenance.nasa_engine_rul`_"
+        "_Source: `dataknobs_predictive_maintenance_and_asset_management.datasets.nasa_data_train_test`_"
     )
 
     with gr.Row():
