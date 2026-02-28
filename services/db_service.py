@@ -123,11 +123,11 @@ def get_summary_kpis() -> dict:
     try:
         eng = _sql_query(f"""
             SELECT
-                ROUND(AVG(CAST(RemainingUsefulLife AS FLOAT)), 0) AS avg_rul,
-                SUM(CASE WHEN RemainingUsefulLife < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
-                SUM(CASE WHEN RemainingUsefulLife >= 20 AND RemainingUsefulLife < 50 THEN 1 ELSE 0 END) AS critical_engines,
-                COUNT(DISTINCT id) AS total_engines
-            FROM {_ENG_TBL}
+                ROUND(AVG(CAST(predicted_rul AS FLOAT)), 0) AS avg_rul,
+                SUM(CASE WHEN predicted_rul < 20 THEN 1 ELSE 0 END) AS failure_imminent_engines,
+                SUM(CASE WHEN predicted_rul >= 20 AND predicted_rul < 50 THEN 1 ELSE 0 END) AS critical_engines,
+                COUNT(DISTINCT unit_nr) AS total_engines
+            FROM predictive_maintenance.nasa_engine_rul
         """)
         if len(eng) > 0:
             kpis.update({
@@ -246,17 +246,16 @@ def get_engine_rul_buckets() -> pd.DataFrame:
     """
     df = _sql_query(f"""
         SELECT
-            id AS engine_id,
-            RemainingUsefulLife AS predicted_rul,
+            unit_nr AS engine_id,
+            predicted_rul,
             CASE
-                WHEN RemainingUsefulLife < 20  THEN 'Failure imminent (<20)'
-                WHEN RemainingUsefulLife < 50  THEN 'Critical (20-49)'
-                WHEN RemainingUsefulLife < 125 THEN 'Warning (50-125)'
+                WHEN predicted_rul < 20  THEN 'Failure imminent (<20)'
+                WHEN predicted_rul < 50  THEN 'Critical (20-49)'
+                WHEN predicted_rul < 125 THEN 'Warning (50-125)'
                 ELSE 'Safe (>125)'
             END AS bucket
-        FROM {_ENG_TBL}
+        FROM predictive_maintenance.nasa_engine_rul
     """)
-    df["bucket"] = df["bucket"].astype(str)  # Ensure bucket is string type
     return df.groupby("bucket", observed=False).size().reset_index(name="count")
 
 
@@ -300,16 +299,16 @@ def get_engine_latest_status(limit: int = 100) -> pd.DataFrame:
     """
     return _sql_query(f"""
         SELECT
-            id AS engine_id,
-            RemainingUsefulLife AS remaining_rul,
+            unit_nr AS engine_id,
+            predicted_rul AS remaining_rul,
             CASE
-                WHEN RemainingUsefulLife < 20  THEN 'Failure imminent'
-                WHEN RemainingUsefulLife < 50  THEN 'Critical'
-                WHEN RemainingUsefulLife < 125 THEN 'Warning'
+                WHEN predicted_rul < 20  THEN 'Failure imminent'
+                WHEN predicted_rul < 50  THEN 'Critical'
+                WHEN predicted_rul < 125 THEN 'Warning'
                 ELSE 'Safe'
             END AS status
-        FROM {_ENG_TBL}
-        ORDER BY RemainingUsefulLife ASC
+        FROM predictive_maintenance.nasa_engine_rul
+        ORDER BY predicted_rul ASC
         LIMIT {limit}
     """)
 
