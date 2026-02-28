@@ -85,8 +85,37 @@ _TAB_NAMES = ["Overview", "CNC Analysis", "Engine Health", "Electrical Monitor",
 _CSS = """
 footer {visibility: hidden}
 .kpi-value { font-size: 2rem; font-weight: 700; }
-/* Fixed bottom-left chat toggle button — visible on every tab */
-#chat-toggle-btn { position: fixed; bottom: 20px; left: 20px; z-index: 1000; }
+/* Fixed bottom-right circular chat toggle button */
+#chat-toggle-btn {
+  position: fixed !important;
+  bottom: 24px !important;
+  right: 24px !important;
+  left: auto !important;
+  z-index: 1000;
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  border-radius: 50% !important;
+  padding: 0 !important;
+  font-size: 1.5rem;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  color: white !important;
+  border: none !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+}
+#chat-toggle-btn:hover,
+#chat-toggle-btn button:hover {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+}
+#chat-toggle-btn button {
+  width: 56px !important;
+  height: 56px !important;
+  min-width: 56px !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  color: white !important;
+}
 #chat-side-panel { max-width: 420px; }
 """
 
@@ -130,8 +159,8 @@ with gr.Blocks(css=_CSS, title="Predictive Maintenance Hub") as demo:
         with gr.Column(scale=4, visible=False, elem_id="chat-side-panel") as chat_panel:
             chat_tab.build(conv_id_state, schema_ctx)
 
-    # Toggle button: fixed bottom-left, opens/closes chat panel
-    toggle_btn = gr.Button("Chat", variant="secondary", elem_id="chat-toggle-btn")
+    # Toggle button: fixed bottom-right, circular message icon, opens/closes chat panel
+    toggle_btn = gr.Button("💬", variant="secondary", elem_id="chat-toggle-btn")
 
     def toggle_panel(visible):
         return not visible, gr.update(visible=not visible)
@@ -192,7 +221,7 @@ if __name__ == "__main__":
     print("Starting Gradio server... (wait for 'Running on local URL' before opening the browser)")
     demo.launch(
         server_name="0.0.0.0",
-        server_port=int(os.getenv("PORT", 7860)),
+        server_port=int(os.getenv("PORT", 7861)),
         show_error=True,
         share=False,
     )

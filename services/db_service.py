@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 # ── Backend detection ──────────────────────────────────────────────────────────
 _IS_DB = bool(os.getenv("DATABRICKS_WAREHOUSE_ID"))
 _DB_PATH = Path(__file__).parent.parent / "database" / "warehouse.db"
+# Local dev only: set DATABRICKS_INSECURE_TLS=true to skip SSL verify (e.g. behind VPN/proxy)
+_INSECURE_TLS = (os.getenv("DATABRICKS_INSECURE_TLS", "") or "").strip().lower().split("#")[0].strip() == "true"
 
 _CATALOG = os.getenv("DATABRICKS_CATALOG", "main")
 _SCHEMA  = os.getenv("DATABRICKS_SCHEMA", "predictive_maintenance")
@@ -57,10 +59,19 @@ def _sql_query(query: str) -> pd.DataFrame:
         from databricks import sql as dbsql
         from databricks.sdk.core import Config
         cfg = Config()
+        # SQL connector expects hostname only (no scheme); strip if present
+        host = (cfg.host or "").strip()
+        if host.startswith("https://"):
+            host = host[8:]
+        elif host.startswith("http://"):
+            host = host[7:]
+        if host.endswith("/"):
+            host = host[:-1]
         with dbsql.connect(
-            server_hostname=cfg.host,
+            server_hostname=host or cfg.host,
             http_path=f"/sql/1.0/warehouses/{os.getenv('DATABRICKS_WAREHOUSE_ID')}",
             credentials_provider=lambda: cfg.authenticate,
+            _tls_no_verify=_INSECURE_TLS,
         ) as conn:
             with conn.cursor() as cursor:
                 cursor.execute(query)

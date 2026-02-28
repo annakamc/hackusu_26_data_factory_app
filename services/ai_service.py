@@ -15,6 +15,8 @@ from dataclasses import dataclass
 logger = logging.getLogger(__name__)
 
 DATABRICKS_HOST  = os.getenv("DATABRICKS_HOST", "")
+# Genie API needs a full URL with scheme; normalize so host-only or full URL both work
+_GENIE_BASE = DATABRICKS_HOST if (DATABRICKS_HOST.startswith("http://") or DATABRICKS_HOST.startswith("https://")) else f"https://{DATABRICKS_HOST}"
 GENIE_SPACE_ID   = os.getenv("GENIE_SPACE_ID", "")
 BEDROCK_REGION   = os.getenv("BEDROCK_REGION", "us-east-1")
 USE_MOCK         = os.getenv("USE_MOCK_AI", "false").lower() == "true"
@@ -93,7 +95,7 @@ def chat_with_data(
 
 # ── Tier 1: Genie ─────────────────────────────────────────────────────────────
 def _start_genie(question: str) -> ChatResponse:
-    url = f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation"
+    url = f"{_GENIE_BASE}/api/2.0/genie/spaces/{GENIE_SPACE_ID}/start-conversation"
     resp = requests.post(url, headers=_genie_headers(), json={"content": question}, timeout=30)
     resp.raise_for_status()
     data = resp.json()
@@ -101,7 +103,7 @@ def _start_genie(question: str) -> ChatResponse:
 
 
 def _continue_genie(conversation_id: str, question: str) -> ChatResponse:
-    url = (f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}"
+    url = (f"{_GENIE_BASE}/api/2.0/genie/spaces/{GENIE_SPACE_ID}"
            f"/conversations/{conversation_id}/messages")
     resp = requests.post(url, headers=_genie_headers(), json={"content": question}, timeout=30)
     resp.raise_for_status()
@@ -110,7 +112,7 @@ def _continue_genie(conversation_id: str, question: str) -> ChatResponse:
 
 
 def _poll_genie(conversation_id: str, message_id: str, max_wait: int = 60) -> ChatResponse:
-    url = (f"{DATABRICKS_HOST}/api/2.0/genie/spaces/{GENIE_SPACE_ID}"
+    url = (f"{_GENIE_BASE}/api/2.0/genie/spaces/{GENIE_SPACE_ID}"
            f"/conversations/{conversation_id}/messages/{message_id}")
     wait, elapsed = 1, 0
     while elapsed < max_wait:
