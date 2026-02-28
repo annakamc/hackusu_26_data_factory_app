@@ -83,6 +83,7 @@ def _build_health_bar(health_df_sorted: pd.DataFrame, show_threshold: bool) -> g
         textfont=dict(size=13),
         hovertemplate="<b>%{x}</b><br>Health Score: %{y:.1f}%<extra></extra>",
         width=0.5,
+        showlegend=False,
     ))
 
     if show_threshold:
