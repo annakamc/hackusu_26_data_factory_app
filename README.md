@@ -3,3 +3,4 @@
 - only has read access
 - AD group created
 - added Data Classification auto on
+- leveraged data lineage through built in features
