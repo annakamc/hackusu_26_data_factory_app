@@ -15,4 +15,3 @@ env:
     value: "us-east-1"
   - name: "USE_MOCK_AI"
     value: "false"
-  # DATABRICKS_TOKEN: set via workspace secrets / env at runtime (never commit)

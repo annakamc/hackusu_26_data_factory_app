@@ -4,15 +4,29 @@ AI/LLM integration — 3-tier architecture:
   Tier 2: Bedrock / Claude Text-to-SQL (fallback)
   Tier 3: Mock (local dev, USE_MOCK_AI=true)
 """
+import json
 import os
 import re
 import time
 import logging
 import requests
 import sqlparse
+from pathlib import Path
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
+
+# #region agent log
+_DEBUG_LOG_PATH = Path(__file__).resolve().parent.parent.parent / "debug-21de4b.log"
+def _debug_log(location: str, message: str, data: dict, hypothesis_id: str):
+    try:
+        payload = {"sessionId": "21de4b", "location": location, "message": message, "data": data, "hypothesisId": hypothesis_id, "timestamp": int(time.time() * 1000)}
+        with open(_DEBUG_LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+        logger.info("[debug] %s | %s | %s", hypothesis_id, message, data)
+    except Exception:
+        logger.info("[debug] %s | %s | %s", hypothesis_id, message, data)
+# #endregion
 
 DATABRICKS_HOST  = os.getenv("DATABRICKS_HOST", "")
 # Genie API needs a full URL with scheme; normalize so host-only or full URL both work
@@ -30,8 +44,28 @@ def _genie_headers() -> dict:
       2. Databricks secrets: dbutils.secrets.get(scope="hackusu", key="genietoken")
       3. databricks-sdk Config() — picks up Databricks Apps OAuth automatically
     """
+    # #region agent log
     token = os.getenv("DATABRICKS_TOKEN", "")
+    token_source = "env" if token else ""
+    _debug_log("ai_service._genie_headers:env", "Token from env", {"env_token_set": bool(token), "env_token_len": len(token) if token else 0}, "H1")
+    # #endregion
     if not token:
+        # #region agent log
+        dbutils_error = None
+        dbutils_ok = False
+        try:
+            dbutils = __import__("dbutils")
+            token = dbutils.secrets.get(scope="hackusu", key="genietoken")
+            dbutils_ok = bool(token)
+            if dbutils_ok:
+                token_source = "dbutils"
+        except (NameError, AttributeError, Exception) as e:
+            dbutils_error = type(e).__name__
+        _debug_log("ai_service._genie_headers:dbutils", "dbutils secrets attempt", {"dbutils_attempted": True, "dbutils_success": dbutils_ok, "dbutils_error": dbutils_error, "token_len_after": len(token) if token else 0}, "H2,H3")
+        # #endregion
+    if not token:
+        # #region agent log
+        config_has_token = False
         try:
             # In Databricks runtime (notebooks, jobs, apps) dbutils may be available
             dbutils = __import__("dbutils")
@@ -42,8 +76,19 @@ def _genie_headers() -> dict:
         try:
             from databricks.sdk.core import Config
             token = Config().token or ""
-        except Exception:
-            pass
+            config_has_token = bool(token)
+            if config_has_token:
+                token_source = "config"
+        except Exception as e:
+            _debug_log("ai_service._genie_headers:config", "Config() token attempt", {"config_attempted": True, "config_has_token": False, "config_error": type(e).__name__}, "H4")
+        else:
+            _debug_log("ai_service._genie_headers:config", "Config() token attempt", {"config_attempted": True, "config_has_token": config_has_token, "token_len": len(token) if token else 0}, "H4")
+        # #endregion
+    if not token_source:
+        token_source = "none"
+    # #region agent log
+    _debug_log("ai_service._genie_headers:exit", "Final token source", {"token_source": token_source, "token_len": len(token) if token else 0}, "H5")
+    # #endregion
     return {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
