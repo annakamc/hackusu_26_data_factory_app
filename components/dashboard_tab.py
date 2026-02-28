@@ -1,6 +1,7 @@
 """Overview Dashboard tab — KPI cards + summary charts across all asset types."""
 import logging
 
+import numpy as np
 import gradio as gr
 import plotly.express as px
 import plotly.graph_objects as go
@@ -15,6 +16,31 @@ _STATUS_COLORS = {
     "Warning (50-125)":       "#FB8C00",
     "Safe (>125)":            "#43A047",
 }
+
+
+def _convex_hull_2d(points: np.ndarray) -> np.ndarray:
+    """Return vertices of the 2D convex hull (Graham scan). points shape (n, 2)."""
+    if len(points) < 3:
+        return points
+    pts = np.array(points, dtype=float)
+    # Start with lowest y, then leftmost
+    idx = np.lexsort((pts[:, 0], pts[:, 1]))
+    start = idx[0]
+    start_pt = pts[start]
+    # Cross product: (a - o) x (b - o)
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    # Sort by angle from start (excluding start)
+    others = np.array([i for i in range(len(pts)) if i != start])
+    angles = np.arctan2(pts[others, 1] - start_pt[1], pts[others, 0] - start_pt[0])
+    others = others[np.argsort(angles)]
+    hull = [start]
+    for i in others:
+        while len(hull) >= 2 and cross(pts[hull[-2]], pts[hull[-1]], pts[i]) <= 0:
+            hull.pop()
+        hull.append(i)
+    return pts[hull]
 
 
 def build(summary: dict) -> list:
@@ -149,21 +175,29 @@ def build(summary: dict) -> list:
                     "failure_label": "Status",
                 },
             )
-            # Shaded envelope around failure points (orange, transparent)
+            # Shaded pool around failure points (convex hull, red-tinted fill)
             fail_df = sc_df[sc_df["failure_label"] == "Failure"]
-            if not fail_df.empty:
-                x_min, x_max = fail_df["tool_wear_min"].min(), fail_df["tool_wear_min"].max()
-                y_min, y_max = fail_df["torque_nm"].min(), fail_df["torque_nm"].max()
-                pad_x = max((x_max - x_min) * 0.05, 1.0)
-                pad_y = max((y_max - y_min) * 0.05, 0.5)
-                typ_fig.add_shape(
-                    type="rect",
-                    x0=x_min - pad_x, x1=x_max + pad_x,
-                    y0=y_min - pad_y, y1=y_max + pad_y,
-                    fillcolor="rgba(255, 152, 0, 0.6)",
+            if not fail_df.empty and len(fail_df) >= 2:
+                pts = fail_df[["tool_wear_min", "torque_nm"]].to_numpy()
+                if len(pts) >= 3:
+                    hull = _convex_hull_2d(pts)
+                    # Close the polygon
+                    hull = np.vstack([hull, hull[0:1]])
+                else:
+                    hull = np.vstack([pts, pts[0:1]])
+                hull_trace = go.Scatter(
+                    x=hull[:, 0],
+                    y=hull[:, 1],
+                    fill="toself",
+                    mode="lines",
                     line=dict(width=0),
-                    layer="below",
+                    fillcolor="rgba(229, 57, 53, 0.6)",
+                    showlegend=False,
+                    hoverinfo="skip",
                 )
+                typ_fig.add_trace(hull_trace)
+                # Draw hull behind the scatter points
+                typ_fig.data = [typ_fig.data[-1]] + list(typ_fig.data[:-1])
             typ_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
             # --- Anomaly table ---
