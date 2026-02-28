@@ -78,7 +78,7 @@ def build(summary: dict) -> list:
 
     with gr.Row():
         torque_chart  = gr.Plot(label="Torque vs RPM (coloured by failure)")
-        type_chart    = gr.Plot(label="Failure Rate & Tool Wear by Machine Type")
+        type_chart    = gr.Plot(label="Tool Wear vs Torque by Machine Type")
 
     # Anomaly alert banner
     gr.Markdown("### ⚠️ Anomaly Alerts (tool wear > 200 min or torque > 65 Nm)")
@@ -136,20 +136,18 @@ def build(summary: dict) -> list:
                         "failure_label": "Status"},
             )
 
-            # --- Tool Wear vs Failure Rate by Machine Type (scatter, single axes) ---
-            typ_df  = db_service.get_cnc_failure_by_type()
+            # --- Tool Wear vs Torque by Machine Type (record-level scatter) ---
             typ_fig = px.scatter(
-                typ_df, x="avg_tool_wear_min", y="failure_rate_pct",
+                sc_df, x="tool_wear_min", y="torque_nm",
                 color="machine_type",
-                text="machine_type",
-                title="Tool Wear and Failure Rate by Machine Type",
+                opacity=0.6,
+                title="Tool Wear vs Torque by Machine Type",
                 labels={
-                    "avg_tool_wear_min": "Avg Tool Wear (min)",
-                    "failure_rate_pct": "Failure Rate (%)",
+                    "tool_wear_min": "Tool Wear (min)",
+                    "torque_nm": "Torque (Nm)",
                     "machine_type": "Machine Type",
                 },
             )
-            typ_fig.update_traces(textposition="top center")
             typ_fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
 
             # --- Anomaly table ---
