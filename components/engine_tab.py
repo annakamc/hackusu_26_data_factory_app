@@ -20,6 +20,51 @@ VARYING_SENSORS = [
 ]
 
 
+ENGINE_COLORS = {1: "#60A5FA", 2: "#F472B6", 3: "#34D399"}
+
+
+def _build_sensor_scatter(df: pd.DataFrame, sensor_x: str, sensor_y: str) -> go.Figure:
+    """Scatter plot comparing two sensors, one dot per reading, coloured by engine."""
+    if df is None or sensor_x not in df.columns or sensor_y not in df.columns:
+        return go.Figure()
+
+    label_x = sensor_x.replace("SensorMeasure", "Sensor ")
+    label_y = sensor_y.replace("SensorMeasure", "Sensor ")
+    fig = go.Figure()
+
+    for eng_id, grp in df.groupby("engine_id"):
+        fig.add_trace(go.Scatter(
+            x=grp[sensor_x],
+            y=grp[sensor_y],
+            mode="markers",
+            name=f"Engine {eng_id}",
+            marker=dict(
+                color=ENGINE_COLORS.get(eng_id, "#94A3B8"),
+                size=4,
+                opacity=0.6,
+            ),
+            hovertemplate=(
+                f"<b>Engine {eng_id}</b><br>"
+                f"{label_x}: %{{x:.3f}}<br>"
+                f"{label_y}: %{{y:.3f}}<br>"
+                "Cycle: %{customdata}<extra></extra>"
+            ),
+            customdata=grp["cycle"],
+        ))
+
+    fig.update_layout(
+        title=f"{label_x} vs {label_y}",
+        xaxis_title=label_x,
+        yaxis_title=label_y,
+        legend=dict(orientation="h", yanchor="top", y=-0.2, font=dict(size=10)),
+        hovermode="closest",
+        margin=dict(l=50, r=20, t=50, b=80),
+        xaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
+    )
+    return fig
+
+
 def build() -> None:
     """Build the Engine Health tab inside a gr.Blocks context."""
 
@@ -43,7 +88,17 @@ def build() -> None:
     # ── Charts ─────────────────────────────────────────────────────────────────
     with gr.Row():
         rul_trend   = gr.Plot(label="RUL Over Time — Top 10 Most Critical Engines")
-        rul_buckets = gr.Plot(label="Fleet Health Distribution")
+        with gr.Column():
+            with gr.Row():
+                sensor_x_dd = gr.Dropdown(
+                    choices=VARYING_SENSORS, value="SensorMeasure2",
+                    label="X Axis Sensor", scale=1,
+                )
+                sensor_y_dd = gr.Dropdown(
+                    choices=VARYING_SENSORS, value="SensorMeasure7",
+                    label="Y Axis Sensor", scale=1,
+                )
+            rul_buckets = gr.Plot(label="Sensor Comparison")
 
     with gr.Row():
         sensor_plot = gr.Plot(label="Sensor Profile — Fleet Average by Cycle")
@@ -120,39 +175,22 @@ def build() -> None:
                 margin=dict(l=50, r=20, t=50, b=80),
             )
 
-            # ── Chart 2: Fleet Health — horizontal stacked bar replacing pie ────
+            # ── Chart 2: Sensor Comparison Scatter ───────────────────────────
             bucket_df = db_service.get_engine_rul_buckets()
             bucket_order = ["Critical (<50)", "Warning (50-99)", "Healthy (≥100)"]
             bucket_df["bucket"] = pd.Categorical(
                 bucket_df["bucket"], categories=bucket_order, ordered=True
             )
             bucket_df = bucket_df.sort_values("bucket")
-            total_engines = bucket_df["count"].sum()
 
-            bucket_fig = go.Figure()
-            for _, row in bucket_df.iterrows():
-                status_key = row["bucket"].split()[0]
-                bucket_fig.add_trace(go.Bar(
-                    y=[row["bucket"]],
-                    x=[row["count"]],
-                    orientation="h",
-                    name=row["bucket"],
-                    marker_color=_STATUS_COLOR.get(status_key, "#94A3B8"),
-                    text=[f"{row['count']} engines  ({row['count']/total_engines*100:.0f}%)"],
-                    textposition="inside",
-                    insidetextanchor="middle",
-                    textfont=dict(color="white", size=12),
-                    hovertemplate=f"<b>{row['bucket']}</b><br>Count: {row['count']}<extra></extra>",
-                ))
+            scatter_raw = db_service._sql_query(f"""
+                SELECT id AS engine_id, Cycle AS cycle, {", ".join(VARYING_SENSORS)}
+                FROM {db_service._ENG_TBL}
+                ORDER BY id, Cycle
+            """)
 
-            bucket_fig.update_layout(
-                title="Fleet Health Distribution",
-                xaxis_title="Engine Count",
-                yaxis_title="",
-                showlegend=False,
-                margin=dict(l=140, r=20, t=50, b=40),
-                yaxis=dict(tickfont=dict(size=11)),
-                xaxis=dict(gridcolor="rgba(148,163,184,0.15)"),
+            bucket_fig = _build_sensor_scatter(
+                scatter_raw, "SensorMeasure2", "SensorMeasure7"
             )
 
             # ── Chart 3: Sensor Profile — all meaningful sensors, legend toggle ─
@@ -260,6 +298,7 @@ def build() -> None:
                 f"### Healthy Engines\n# **{healthy}**",
                 f"### Fleet Avg RUL\n# **{avg_rul} cycles**",
                 "",
+                scatter_raw,
             )
 
         except Exception as exc:
@@ -270,7 +309,8 @@ def build() -> None:
                     "### Warning Engines\n# **—**",
                     "### Healthy Engines\n# **—**",
                     "### Fleet Avg RUL\n# **—**",
-                    f"⚠️ {str(exc)[:120]}")
+                    f"⚠️ {str(exc)[:120]}",
+                    None)
 
     def generate_schedule(request: gr.Request):
         """STRETCH: Build a maintenance schedule from current RUL data."""
@@ -305,9 +345,25 @@ def build() -> None:
         except Exception as exc:
             return pd.DataFrame({"error": [str(exc)]})
 
+    scatter_df_state = gr.State(value=None)
+
+    def redraw_scatter(sensor_x, sensor_y, raw_df):
+        if raw_df is None:
+            return go.Figure()
+        df = pd.DataFrame(raw_df) if isinstance(raw_df, list) else raw_df
+        return _build_sensor_scatter(df, sensor_x, sensor_y)
+
+    sensor_x_dd.change(fn=redraw_scatter,
+                       inputs=[sensor_x_dd, sensor_y_dd, scatter_df_state],
+                       outputs=[rul_buckets])
+    sensor_y_dd.change(fn=redraw_scatter,
+                       inputs=[sensor_x_dd, sensor_y_dd, scatter_df_state],
+                       outputs=[rul_buckets])
+
     load_btn.click(
         fn=load_data,
         outputs=[rul_trend, rul_buckets, sensor_plot, status_bar, engine_table,
-                 kpi_critical, kpi_warning, kpi_healthy, kpi_avg_rul, status],
+                 kpi_critical, kpi_warning, kpi_healthy, kpi_avg_rul, status,
+                 scatter_df_state],
     )
     sched_btn.click(fn=generate_schedule, outputs=[sched_tbl])
