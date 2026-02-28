@@ -66,6 +66,44 @@ def _build_voltage_trend(df: pd.DataFrame, selected: list) -> go.Figure:
     return fig
 
 
+def _build_health_bar(health_df_sorted: pd.DataFrame, show_threshold: bool) -> go.Figure:
+    """Build the health score bar chart with optional threshold line."""
+    bar_colors = [
+        "#43A047" if s >= 98 else "#FB8C00" if s >= 95 else "#E53935"
+        for s in health_df_sorted["health_score_pct"]
+    ]
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        x=health_df_sorted["PhID"],
+        y=health_df_sorted["health_score_pct"],
+        marker_color=bar_colors,
+        text=[f"{s}%" for s in health_df_sorted["health_score_pct"]],
+        textposition="outside",
+        textfont=dict(size=13),
+        hovertemplate="<b>%{x}</b><br>Health Score: %{y:.1f}%<extra></extra>",
+        width=0.5,
+    ))
+
+    if show_threshold:
+        fig.add_hline(
+            y=95, line_dash="dash", line_color="#000000", line_width=1.5,
+            annotation_text="Degradation threshold (95%)",
+            annotation_font=dict(color="#000000"),
+        )
+
+    fig.update_layout(
+        title="Heater Health Score (Recent vs Baseline Voltage)",
+        xaxis_title="",
+        yaxis_title="Health Score (%)",
+        yaxis=dict(range=[85, 102], gridcolor="rgba(148,163,184,0.1)"),
+        showlegend=False,
+        margin=dict(l=50, r=20, t=50, b=40),
+        bargap=0.4,
+    )
+    return fig
+
+
 def build() -> None:
     """Build the Heater Health tab inside a gr.Blocks context."""
 
@@ -86,19 +124,24 @@ def build() -> None:
         kpi_total_cycles  = gr.Markdown("### Total Cycles\n# **—**")
         kpi_most_degraded = gr.Markdown("### Most Degraded\n# **—**")
 
-    # State holds the full aggregated df so toggling doesn't re-query Databricks
-    trend_df_state = gr.State(value=None)
+    # State
+    trend_df_state  = gr.State(value=None)
+    health_df_state = gr.State(value=None)
 
     # ── Charts ─────────────────────────────────────────────────────────────────
     with gr.Row():
         with gr.Column():
             heater_toggle = gr.CheckboxGroup(
-                choices=[],   # populated on load
-                value=[],
+                choices=[], value=[],
                 label="Show Heaters",
             )
             voltage_trend = gr.Plot(label="Voltage Degradation Over Cycles (per heater)")
-        health_bar = gr.Plot(label="Heater Health Score — Current vs Baseline Voltage")
+        with gr.Column():
+            threshold_toggle = gr.Checkbox(
+                value=True,
+                label="Show Degradation Threshold Line",
+            )
+            health_bar = gr.Plot(label="Heater Health Score — Current vs Baseline Voltage")
 
     with gr.Row():
         temp_voltage   = gr.Plot(label="Temperature vs Voltage (degradation relationship)")
@@ -156,41 +199,13 @@ def build() -> None:
             health_df     = pd.DataFrame(health_rows).sort_values("health_score_pct")
             most_degraded = health_df.iloc[0]["PhID"]
 
-            # ── Chart 1: Voltage degradation — all heaters selected by default ─
+            # ── Chart 1: Voltage degradation ──────────────────────────────────
             all_heaters = sorted(df["PhID"].unique().tolist())
             volt_fig    = _build_voltage_trend(df, all_heaters)
 
-            # ── Chart 2: Health score bar ──────────────────────────────────────
+            # ── Chart 2: Health score bar (threshold on by default) ────────────
             health_df_sorted = health_df.sort_values("health_score_pct", ascending=False)
-            bar_colors = [
-                "#43A047" if s >= 98 else "#FB8C00" if s >= 95 else "#E53935"
-                for s in health_df_sorted["health_score_pct"]
-            ]
-            health_fig = go.Figure()
-            health_fig.add_trace(go.Bar(
-                x=health_df_sorted["PhID"],
-                y=health_df_sorted["health_score_pct"],
-                marker_color=bar_colors,
-                text=[f"{s}%" for s in health_df_sorted["health_score_pct"]],
-                textposition="outside",
-                textfont=dict(size=13),
-                hovertemplate="<b>%{x}</b><br>Health Score: %{y:.1f}%<extra></extra>",
-                width=0.5,
-            ))
-            health_fig.add_hline(
-                y=95, line_dash="dash", line_color="#FB8C00", line_width=1.5,
-                annotation_text="Degradation threshold (95%)",
-                annotation_font=dict(color="#FB8C00"),
-            )
-            health_fig.update_layout(
-                title="Heater Health Score (Recent vs Baseline Voltage)",
-                xaxis_title="",
-                yaxis_title="Health Score (%)",
-                yaxis=dict(range=[85, 102], gridcolor="rgba(148,163,184,0.1)"),
-                showlegend=False,
-                margin=dict(l=50, r=20, t=50, b=40),
-                bargap=0.4,
-            )
+            health_fig       = _build_health_bar(health_df_sorted, show_threshold=True)
 
             # ── Chart 3: Temperature vs Voltage scatter ────────────────────────
             temp_fig = go.Figure()
@@ -273,8 +288,9 @@ def build() -> None:
                 f"### Total Cycles\n# **{n_cycles}**",
                 f"### Most Degraded\n# **{most_degraded}**",
                 "",
-                df,                                                          # → trend_df_state
-                gr.CheckboxGroup(choices=all_heaters, value=all_heaters),   # → heater_toggle
+                df,                                                         # → trend_df_state
+                health_df_sorted,                                           # → health_df_state
+                gr.CheckboxGroup(choices=all_heaters, value=all_heaters),  # → heater_toggle
             )
 
         except Exception as exc:
@@ -288,15 +304,20 @@ def build() -> None:
                 "### Total Cycles\n# **—**",
                 "### Most Degraded\n# **—**",
                 f"⚠️ {str(exc)[:120]}",
-                None, gr.update(),
+                None, None, gr.update(),
             )
 
     def redraw_voltage_trend(selected, raw_df):
-        """Redraw chart when checkbox selection changes."""
         if raw_df is None or not selected:
             return go.Figure()
         df = pd.DataFrame(raw_df) if isinstance(raw_df, list) else raw_df
         return _build_voltage_trend(df, selected)
+
+    def redraw_health_bar(show_threshold, raw_health_df):
+        if raw_health_df is None:
+            return go.Figure()
+        df = pd.DataFrame(raw_health_df) if isinstance(raw_health_df, list) else raw_health_df
+        return _build_health_bar(df, show_threshold)
 
     # ── Wire load button ───────────────────────────────────────────────────────
     load_btn.click(
@@ -305,13 +326,19 @@ def build() -> None:
             voltage_trend, health_bar, temp_voltage, discharge_plot,
             heater_table, degradation_tbl,
             kpi_avg_voltage, kpi_avg_temp, kpi_total_cycles, kpi_most_degraded,
-            status, trend_df_state, heater_toggle,
+            status, trend_df_state, health_df_state, heater_toggle,
         ],
     )
 
-    # ── Wire toggle → redraw chart ─────────────────────────────────────────────
+    # ── Wire toggles ───────────────────────────────────────────────────────────
     heater_toggle.change(
         fn=redraw_voltage_trend,
         inputs=[heater_toggle, trend_df_state],
         outputs=[voltage_trend],
+    )
+
+    threshold_toggle.change(
+        fn=redraw_health_bar,
+        inputs=[threshold_toggle, health_df_state],
+        outputs=[health_bar],
     )
