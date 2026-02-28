@@ -18,6 +18,54 @@ _HEATER_COLORS = {
 }
 
 
+def _build_voltage_trend(df: pd.DataFrame, selected: list) -> go.Figure:
+    """Build voltage degradation chart filtered to selected heaters."""
+    fig = go.Figure()
+
+    for phid, grp in df.groupby("PhID"):
+        if phid not in selected:
+            continue
+        grp_s = grp.sort_values("id_cycle")
+        fig.add_trace(go.Scatter(
+            x=grp_s["id_cycle"],
+            y=grp_s["avg_voltage"],
+            mode="lines",
+            name=phid,
+            line=dict(color=_HEATER_COLORS.get(phid, "#94A3B8"), width=2),
+            hovertemplate=(
+                f"<b>{phid}</b><br>"
+                "Cycle: %{x}<br>"
+                "Avg Voltage: %{y:.4f} V<extra></extra>"
+            ),
+        ))
+
+    # Fleet average across selected heaters only
+    filtered = df[df["PhID"].isin(selected)]
+    if len(filtered) > 0:
+        fleet_avg = filtered.groupby("id_cycle")["avg_voltage"].mean().reset_index()
+        fig.add_trace(go.Scatter(
+            x=fleet_avg["id_cycle"],
+            y=fleet_avg["avg_voltage"],
+            mode="lines",
+            name="Fleet Average",
+            line=dict(color="white", width=1.5, dash="dot"),
+            opacity=0.5,
+            hovertemplate="Fleet Avg — Cycle: %{x}<br>Voltage: %{y:.4f} V<extra></extra>",
+        ))
+
+    fig.update_layout(
+        title="Voltage Degradation Over Cycles",
+        xaxis_title="Cycle",
+        yaxis_title="Avg Voltage (V)",
+        legend=dict(orientation="h", yanchor="top", y=-0.2, font=dict(size=10)),
+        hovermode="x unified",
+        margin=dict(l=50, r=20, t=50, b=80),
+        xaxis=dict(gridcolor="rgba(148,163,184,0.1)"),
+        yaxis=dict(gridcolor="rgba(148,163,184,0.1)"),
+    )
+    return fig
+
+
 def build() -> None:
     """Build the Heater Health tab inside a gr.Blocks context."""
 
@@ -33,24 +81,33 @@ def build() -> None:
 
     # ── KPI row ────────────────────────────────────────────────────────────────
     with gr.Row():
-        kpi_avg_voltage  = gr.Markdown("### Fleet Avg Voltage\n# **—V**")
-        kpi_avg_temp     = gr.Markdown("### Fleet Avg Temp\n# **—°C**")
-        kpi_total_cycles = gr.Markdown("### Total Cycles\n# **—**")
+        kpi_avg_voltage   = gr.Markdown("### Fleet Avg Voltage\n# **—V**")
+        kpi_avg_temp      = gr.Markdown("### Fleet Avg Temp\n# **—°C**")
+        kpi_total_cycles  = gr.Markdown("### Total Cycles\n# **—**")
         kpi_most_degraded = gr.Markdown("### Most Degraded\n# **—**")
+
+    # State holds the full aggregated df so toggling doesn't re-query Databricks
+    trend_df_state = gr.State(value=None)
 
     # ── Charts ─────────────────────────────────────────────────────────────────
     with gr.Row():
-        voltage_trend = gr.Plot(label="Voltage Degradation Over Cycles (per heater)")
-        health_bar    = gr.Plot(label="Heater Health Score — Current vs Baseline Voltage")
+        with gr.Column():
+            heater_toggle = gr.CheckboxGroup(
+                choices=[],   # populated on load
+                value=[],
+                label="Show Heaters",
+            )
+            voltage_trend = gr.Plot(label="Voltage Degradation Over Cycles (per heater)")
+        health_bar = gr.Plot(label="Heater Health Score — Current vs Baseline Voltage")
 
     with gr.Row():
-        temp_voltage  = gr.Plot(label="Temperature vs Voltage (degradation relationship)")
+        temp_voltage   = gr.Plot(label="Temperature vs Voltage (degradation relationship)")
         discharge_plot = gr.Plot(label="Discharge Time Distribution per Heater")
 
     gr.Markdown("### Heater Summary Table")
     heater_table = gr.DataFrame(label="Per-heater stats — avg voltage, temp, cycles", height=250)
 
-    # ── Maintenance accordion ──────────────────────────────────────────────────
+    # ── Degradation accordion ──────────────────────────────────────────────────
     with gr.Accordion("Degradation Detail", open=False):
         gr.Markdown(
             "Health score is derived from voltage: each heater's average voltage over its "
@@ -66,7 +123,7 @@ def build() -> None:
         role  = user["role"]  if user else "viewer"
 
         try:
-            df = db_service._sql_query(f"""
+            df = db_service._sql_query("""
                 SELECT PhID, id_cycle, Time,
                        ROUND(AVG(Voltage_measured), 4)     AS avg_voltage,
                        ROUND(AVG(Temperature_measured), 4) AS avg_temp,
@@ -83,10 +140,10 @@ def build() -> None:
             avg_t    = round(df["avg_temp"].mean(), 2)
             n_cycles = df["id_cycle"].nunique()
 
-            # Health score per heater: last 10 cycles avg vs first 10 cycles avg
+            # Health score per heater: last 10 cycles vs first 10 cycles
             health_rows = []
             for phid, grp in df.groupby("PhID"):
-                grp_s   = grp.sort_values("id_cycle")
+                grp_s    = grp.sort_values("id_cycle")
                 baseline = grp_s.head(10)["avg_voltage"].mean()
                 recent   = grp_s.tail(10)["avg_voltage"].mean()
                 score    = round((recent / baseline) * 100, 1) if baseline > 0 else 0
@@ -96,48 +153,12 @@ def build() -> None:
                     "recent_voltage":   round(recent, 4),
                     "health_score_pct": score,
                 })
-            health_df = pd.DataFrame(health_rows).sort_values("health_score_pct")
+            health_df     = pd.DataFrame(health_rows).sort_values("health_score_pct")
             most_degraded = health_df.iloc[0]["PhID"]
 
-            # ── Chart 1: Voltage degradation trend per heater ─────────────────
-            volt_fig = go.Figure()
-            for phid, grp in df.groupby("PhID"):
-                grp_s = grp.sort_values("id_cycle")
-                volt_fig.add_trace(go.Scatter(
-                    x=grp_s["id_cycle"],
-                    y=grp_s["avg_voltage"],
-                    mode="lines",
-                    name=phid,
-                    line=dict(color=_HEATER_COLORS.get(phid, "#94A3B8"), width=2),
-                    hovertemplate=(
-                        f"<b>{phid}</b><br>"
-                        "Cycle: %{x}<br>"
-                        "Avg Voltage: %{y:.4f} V<extra></extra>"
-                    ),
-                ))
-
-            # Add a rolling-average reference line across all heaters
-            fleet_avg = df.groupby("id_cycle")["avg_voltage"].mean().reset_index()
-            volt_fig.add_trace(go.Scatter(
-                x=fleet_avg["id_cycle"],
-                y=fleet_avg["avg_voltage"],
-                mode="lines",
-                name="Fleet Average",
-                line=dict(color="white", width=1.5, dash="dot"),
-                opacity=0.5,
-                hovertemplate="Fleet Avg — Cycle: %{x}<br>Voltage: %{y:.4f} V<extra></extra>",
-            ))
-
-            volt_fig.update_layout(
-                title="Voltage Degradation Over Cycles",
-                xaxis_title="Cycle",
-                yaxis_title="Avg Voltage (V)",
-                legend=dict(orientation="h", yanchor="top", y=-0.2, font=dict(size=10)),
-                hovermode="x unified",
-                margin=dict(l=50, r=20, t=50, b=80),
-                xaxis=dict(gridcolor="rgba(148,163,184,0.1)"),
-                yaxis=dict(gridcolor="rgba(148,163,184,0.1)"),
-            )
+            # ── Chart 1: Voltage degradation — all heaters selected by default ─
+            all_heaters = sorted(df["PhID"].unique().tolist())
+            volt_fig    = _build_voltage_trend(df, all_heaters)
 
             # ── Chart 2: Health score bar ──────────────────────────────────────
             health_df_sorted = health_df.sort_values("health_score_pct", ascending=False)
@@ -145,7 +166,6 @@ def build() -> None:
                 "#43A047" if s >= 98 else "#FB8C00" if s >= 95 else "#E53935"
                 for s in health_df_sorted["health_score_pct"]
             ]
-
             health_fig = go.Figure()
             health_fig.add_trace(go.Bar(
                 x=health_df_sorted["PhID"],
@@ -253,6 +273,8 @@ def build() -> None:
                 f"### Total Cycles\n# **{n_cycles}**",
                 f"### Most Degraded\n# **{most_degraded}**",
                 "",
+                df,                                                          # → trend_df_state
+                gr.CheckboxGroup(choices=all_heaters, value=all_heaters),   # → heater_toggle
             )
 
         except Exception as exc:
@@ -266,14 +288,30 @@ def build() -> None:
                 "### Total Cycles\n# **—**",
                 "### Most Degraded\n# **—**",
                 f"⚠️ {str(exc)[:120]}",
+                None, gr.update(),
             )
 
+    def redraw_voltage_trend(selected, raw_df):
+        """Redraw chart when checkbox selection changes."""
+        if raw_df is None or not selected:
+            return go.Figure()
+        df = pd.DataFrame(raw_df) if isinstance(raw_df, list) else raw_df
+        return _build_voltage_trend(df, selected)
+
+    # ── Wire load button ───────────────────────────────────────────────────────
     load_btn.click(
         fn=load_data,
         outputs=[
             voltage_trend, health_bar, temp_voltage, discharge_plot,
             heater_table, degradation_tbl,
             kpi_avg_voltage, kpi_avg_temp, kpi_total_cycles, kpi_most_degraded,
-            status,
+            status, trend_df_state, heater_toggle,
         ],
+    )
+
+    # ── Wire toggle → redraw chart ─────────────────────────────────────────────
+    heater_toggle.change(
+        fn=redraw_voltage_trend,
+        inputs=[heater_toggle, trend_df_state],
+        outputs=[voltage_trend],
     )
